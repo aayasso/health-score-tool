@@ -19,180 +19,200 @@ st.set_page_config(
 # ── STYLES ───────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Serif+Display&display=swap');
 
-html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif;
-    background-color: #F7F7F5;
-    color: #1A1A1A;
+html, body, [class*="css"], .stApp {
+    font-family: 'DM Sans', sans-serif !important;
+    background-color: #F5F5F2 !important;
+    color: #1A1A1A !important;
 }
 
-/* Hide Streamlit chrome */
-#MainMenu, footer, header { visibility: hidden; }
-.block-container { padding-top: 2rem; padding-bottom: 3rem; max-width: 680px; }
+.stApp { background-color: #F5F5F2 !important; }
 
-/* Search box */
+#MainMenu, footer, header { visibility: hidden; }
+.block-container {
+    padding-top: 2.5rem;
+    padding-bottom: 3rem;
+    max-width: 660px;
+}
+
 .stTextInput > div > div > input {
-    border: 2px solid #E0E0DB;
-    border-radius: 14px;
-    padding: 14px 18px;
-    font-size: 1.1rem;
-    font-family: 'DM Sans', sans-serif;
-    background: #FFFFFF;
-    color: #1A1A1A;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    transition: border-color 0.2s;
+    border: 2px solid #DDDDD8 !important;
+    border-radius: 14px !important;
+    padding: 14px 18px !important;
+    font-size: 1.05rem !important;
+    font-family: 'DM Sans', sans-serif !important;
+    background: #FFFFFF !important;
+    color: #1A1A1A !important;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.05) !important;
 }
 .stTextInput > div > div > input:focus {
-    border-color: #4A7C59;
-    box-shadow: 0 0 0 3px rgba(74,124,89,0.12);
+    border-color: #3A7D54 !important;
+    box-shadow: 0 0 0 3px rgba(58,125,84,0.1) !important;
 }
 
-/* Cards */
+.streamlit-expanderHeader {
+    background: #FFFFFF !important;
+    border-radius: 14px !important;
+    border: 1px solid #E8E8E3 !important;
+    color: #3A7D54 !important;
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 500 !important;
+}
+.streamlit-expanderContent {
+    background: #FFFFFF !important;
+    border: 1px solid #E8E8E3 !important;
+    border-top: none !important;
+    border-radius: 0 0 14px 14px !important;
+}
+
 .card {
     background: #FFFFFF;
     border-radius: 20px;
-    padding: 28px;
-    margin-bottom: 16px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-    border: 1px solid #EBEBEB;
-}
-.card-tight {
-    background: #FFFFFF;
-    border-radius: 20px;
-    padding: 22px 28px;
-    margin-bottom: 16px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-    border: 1px solid #EBEBEB;
+    padding: 26px 28px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 8px rgba(0,0,0,0.06);
+    border: 1px solid #E8E8E3;
 }
 
-/* Grade badge */
-.grade-badge {
-    display: inline-block;
+.section-header {
     font-family: 'DM Serif Display', serif;
-    font-size: 3rem;
-    line-height: 1;
+    font-size: 1.15rem;
     color: #1A1A1A;
+    margin-bottom: 2px;
+}
+.section-sub {
+    font-size: 0.82rem;
+    color: #AAAAAA;
+    margin-bottom: 14px;
 }
 
-/* Component row */
-.component-row {
+.comp-row {
     display: flex;
-    align-items: flex-start;
-    padding: 14px 0;
-    border-bottom: 1px solid #F0F0EC;
-    gap: 14px;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid #F2F2EE;
+    gap: 12px;
 }
-.component-row:last-child { border-bottom: none; }
+.comp-row:last-child { border-bottom: none; }
 .comp-dot {
-    width: 12px;
-    height: 12px;
+    width: 11px;
+    height: 11px;
     border-radius: 50%;
-    margin-top: 5px;
     flex-shrink: 0;
 }
+.comp-info { flex: 1; min-width: 0; }
 .comp-label {
+    font-size: 0.93rem;
     font-weight: 600;
-    font-size: 0.95rem;
     color: #1A1A1A;
+    line-height: 1.3;
 }
-.comp-sublabel {
-    font-size: 0.82rem;
-    color: #888;
-    margin-top: 2px;
+.comp-sub {
+    font-size: 0.79rem;
+    color: #AAAAAA;
+    margin-top: 1px;
 }
 .comp-score {
-    margin-left: auto;
+    font-size: 0.93rem;
     font-weight: 600;
-    font-size: 0.95rem;
-    color: #1A1A1A;
+    color: #444;
     white-space: nowrap;
+    flex-shrink: 0;
 }
 
-/* Interpretation text */
 .interp-text {
-    font-size: 0.97rem;
-    line-height: 1.7;
+    font-size: 0.95rem;
+    line-height: 1.75;
     color: #3A3A3A;
 }
 
-/* Percentile pills */
-.pill-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
 .pill {
-    background: #F0F5F2;
-    color: #3A6647;
+    display: inline-block;
+    background: #EEF5F1;
+    color: #2D6644;
     border-radius: 20px;
-    padding: 5px 14px;
-    font-size: 0.82rem;
+    padding: 5px 13px;
+    font-size: 0.80rem;
     font-weight: 500;
+    margin-right: 6px;
+    margin-top: 6px;
 }
 
-/* Metro comparison table */
 .metro-row {
     display: flex;
     align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px solid #F0F0EC;
-    gap: 12px;
-    font-size: 0.9rem;
+    padding: 9px 0;
+    border-bottom: 1px solid #F2F2EE;
+    gap: 10px;
+    font-size: 0.88rem;
 }
 .metro-row:last-child { border-bottom: none; }
-.metro-zip { font-weight: 600; color: #1A1A1A; min-width: 60px; }
-.metro-bar-wrap { flex: 1; background: #F0F0EC; border-radius: 4px; height: 8px; overflow: hidden; }
-.metro-bar { height: 8px; border-radius: 4px; }
-.metro-score { min-width: 40px; text-align: right; color: #666; font-size: 0.85rem; }
-.metro-grade { min-width: 28px; text-align: right; font-weight: 600; }
+.metro-zip { font-weight: 600; color: #1A1A1A; min-width: 58px; }
+.metro-bar-wrap {
+    flex: 1;
+    background: #F0F0EC;
+    border-radius: 4px;
+    height: 7px;
+    overflow: hidden;
+}
+.metro-bar { height: 7px; border-radius: 4px; }
+.metro-score { min-width: 36px; text-align: right; color: #888; font-size: 0.82rem; }
+.metro-grade { min-width: 24px; text-align: right; font-weight: 700; font-size: 0.88rem; }
 
-/* Expander */
+details {
+    border-bottom: 1px solid #F2F2EE;
+    padding: 4px 0;
+}
+details:last-of-type { border-bottom: none; }
 details > summary {
-    font-size: 0.9rem;
-    color: #4A7C59;
+    font-size: 0.88rem;
+    color: #2D6644;
     font-weight: 500;
     cursor: pointer;
     padding: 8px 0;
     list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 details > summary::-webkit-details-marker { display: none; }
-details > summary::before { content: "▸  "; }
-details[open] > summary::before { content: "▾  "; }
-
-/* Section header */
-.section-header {
-    font-family: 'DM Serif Display', serif;
-    font-size: 1.25rem;
-    color: #1A1A1A;
-    margin-bottom: 4px;
-}
-.section-sub {
-    font-size: 0.85rem;
-    color: #999;
-    margin-bottom: 16px;
+details > div {
+    padding: 4px 0 10px 22px;
+    font-size: 0.86rem;
+    color: #555;
+    line-height: 1.65;
 }
 
-/* App header */
-.app-header {
-    text-align: center;
-    margin-bottom: 2rem;
-}
 .app-title {
     font-family: 'DM Serif Display', serif;
-    font-size: 1.9rem;
+    font-size: 1.75rem;
     color: #1A1A1A;
-    letter-spacing: -0.5px;
+    letter-spacing: -0.3px;
+    text-align: center;
 }
-.app-subtitle {
-    font-size: 0.9rem;
-    color: #999;
+.app-sub {
+    font-size: 0.85rem;
+    color: #AAAAAA;
+    text-align: center;
     margin-top: 4px;
+    margin-bottom: 1.8rem;
 }
 
-/* Error / info */
 .info-box {
-    background: #F0F5F2;
+    background: #EEF5F1;
     border-radius: 14px;
-    padding: 18px 22px;
-    color: #3A6647;
-    font-size: 0.92rem;
+    padding: 16px 20px;
+    color: #2D6644;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+.error-box {
+    background: #FFF2EE;
+    border-radius: 14px;
+    padding: 16px 20px;
+    color: #8B3A2A;
+    font-size: 0.9rem;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -236,151 +256,166 @@ def fetch_zip_meta(zipcode: str):
     return r.data[0] if r.data else None
 
 @st.cache_data(ttl=3600)
-def fetch_metro_peers(metro: str, limit: int = 12):
-    r = supabase.table("composite_scores")\
-        .select("zipcode,composite_score,score_grade,metro_percentile")\
-        .eq("score_dimension", "respiratory")\
+def fetch_metro_peers(metro: str, limit: int = 15):
+    # Step 1: get all zipcodes in this metro
+    zips_resp = supabase.table("zip_codes")\
+        .select("zipcode")\
         .eq("metro", metro)\
-        .order("composite_score", desc=True)\
-        .limit(limit).execute()
-    return r.data
+        .execute()
+    if not zips_resp.data:
+        return []
+
+    metro_zips = [r["zipcode"] for r in zips_resp.data]
+
+    # Step 2: fetch scores in batches (Supabase IN limit ~100)
+    all_scores = []
+    batch_size = 50
+    for i in range(0, len(metro_zips), batch_size):
+        batch = metro_zips[i:i + batch_size]
+        resp = supabase.table("composite_scores")\
+            .select("zipcode,composite_score,score_grade,metro_percentile")\
+            .eq("score_dimension", "respiratory")\
+            .in_("zipcode", batch)\
+            .execute()
+        all_scores.extend(resp.data)
+
+    all_scores.sort(key=lambda x: x["composite_score"], reverse=True)
+    return all_scores[:limit]
 
 
 # ── CONSTANTS ─────────────────────────────────────────────────
 COMPONENT_CONFIG = {
     "air_quality": {
-        "label":    "Air Quality",
-        "color":    "#4A7C59",   # deep green
-        "weight":   40,
-        "sublabel": "Outdoor air pollution levels",
-        "explain":  "Measures three key air pollutants in your neighborhood: fine particles (PM2.5) from traffic and industry that penetrate deep into lungs; ozone, a ground-level gas that irritates airways; and nitrogen dioxide (NO2) from vehicles and power plants. High scores mean cleaner air.",
-    },
-    "green_cover": {
-        "label":    "Green Cover",
-        "color":    "#82B89A",   # medium green
-        "weight":   20,
-        "sublabel": "Tree canopy & vegetation",
-        "explain":  "Reflects how much of the neighborhood is covered by trees and vegetation. Green spaces filter air pollutants, reduce heat, and are linked to better respiratory and mental health. Higher scores mean more tree canopy.",
+        "label":   "Air Quality",
+        "color":   "#1A6B3C",
+        "weight":  40,
+        "sublabel":"Outdoor air pollution levels",
+        "explain": "Measures three key air pollutants: fine particles (PM2.5) from traffic and industry that penetrate deep into the lungs; ground-level ozone, a gas that irritates airways on hot days; and nitrogen dioxide (NO2) from vehicles and power plants. Higher scores mean cleaner air.",
     },
     "environmental_burden": {
-        "label":    "Environmental Burden",
-        "color":    "#2D5C3F",   # darkest green
-        "weight":   25,
-        "sublabel": "Industrial & traffic exposure",
-        "explain":  "Captures cumulative environmental stressors beyond air quality alone — proximity to diesel traffic, industrial facilities, and other pollution sources that disproportionately affect some neighborhoods. Lower burden = higher score.",
+        "label":   "Environmental Burden",
+        "color":   "#5BA882",
+        "weight":  25,
+        "sublabel":"Industrial & traffic exposure",
+        "explain": "Captures cumulative environmental stressors beyond air quality alone — proximity to diesel traffic corridors, industrial facilities, and other pollution sources that affect some neighborhoods more than others. Lower burden equals a higher score here.",
+    },
+    "green_cover": {
+        "label":   "Green Cover",
+        "color":   "#A8D5B5",
+        "weight":  20,
+        "sublabel":"Tree canopy & vegetation",
+        "explain": "Reflects how much of the neighborhood is covered by trees and vegetation. Green spaces filter airborne pollutants, reduce urban heat, and are consistently linked to better respiratory and mental health outcomes. Higher scores mean more tree canopy.",
     },
     "health_outcomes": {
-        "label":    "Health Outcomes",
-        "color":    "#A8D5B5",   # lightest green
-        "weight":   15,
-        "sublabel": "Local respiratory disease rates",
-        "explain":  "Reflects actual asthma and COPD rates among residents in this ZIP code, based on CDC health surveys. This captures the cumulative effect of environmental conditions on real people's health. Higher scores mean lower disease rates.",
+        "label":   "Health Outcomes",
+        "color":   "#2E9E5B",
+        "weight":  15,
+        "sublabel":"Local respiratory disease rates",
+        "explain": "Reflects actual asthma and COPD rates among residents in this ZIP code, based on CDC health surveys. This captures the real-world cumulative effect of environmental conditions on people's health over time. Higher scores mean lower disease prevalence.",
     },
 }
 
-GRADE_DESCRIPTIONS = {
-    "A": ("Excellent", "#2D7D46", "This neighborhood has among the cleanest air and lowest respiratory health burdens in the country. A strong choice for families, seniors, or anyone with respiratory sensitivities."),
-    "B": ("Good",      "#5A9E6F", "Air quality and environmental conditions here are above average. Most residents experience a healthy respiratory environment with only minor concerns."),
-    "C": ("Fair",      "#C8882A", "This neighborhood has moderate respiratory health conditions — better than many urban areas, but some factors warrant attention, particularly for sensitive groups."),
-    "D": ("Poor",      "#C85A2A", "Elevated air pollution or environmental burdens create meaningful respiratory health risks here. Those with asthma or lung conditions should factor this in carefully."),
-    "F": ("Very Poor", "#B02020", "This neighborhood faces significant air quality and environmental health challenges. Respiratory health risks are substantially higher than the national average."),
+GRADE_INFO = {
+    "A": ("#1A6B3C", "Excellent",  "This neighborhood has among the cleanest air and lowest respiratory health burdens in the country. A strong choice for families, seniors, or anyone with respiratory sensitivities."),
+    "B": ("#3A8C5C", "Good",       "Air quality and environmental conditions here are above average. Most residents experience a healthy respiratory environment with only minor concerns."),
+    "C": ("#B87A1A", "Fair",       "This neighborhood has moderate respiratory health conditions — better than many urban areas, but some factors warrant attention, particularly for sensitive groups."),
+    "D": ("#C05020", "Poor",       "Elevated air pollution or environmental burdens create meaningful respiratory health risks. Those with asthma or lung conditions should factor this in carefully."),
+    "F": ("#A01818", "Very Poor",  "This neighborhood faces significant air quality and environmental health challenges. Respiratory health risks are substantially higher than the national average."),
 }
 
 
-# ── SVG DISC ──────────────────────────────────────────────────
+# ── SINGLE DISC SVG ───────────────────────────────────────────
 def make_disc_svg(component_scores: dict, composite: float, grade: str) -> str:
     """
-    Renders an Apple Health-style multi-arc disc.
-    Each arc corresponds to one component, sized by weight,
-    filled proportionally to that component's normalized score.
+    Single ring divided into 4 arc segments sized by component weight.
+    Each segment fills proportionally to its 0-100 score.
     """
-    size       = 220
-    cx, cy     = size / 2, size / 2
-    stroke_w   = 16
-    gap_deg    = 3          # gap between arcs in degrees
-    order      = ["air_quality", "environmental_burden", "green_cover", "health_outcomes"]
-    radii      = [82, 64, 46, 28]   # outer → inner rings
+    size    = 210
+    cx, cy  = size / 2, size / 2
+    r       = 80
+    sw      = 22
+    gap_deg = 3.0
+    order   = ["air_quality", "environmental_burden", "green_cover", "health_outcomes"]
+    total_w = sum(COMPONENT_CONFIG[k]["weight"] for k in order)
+    usable  = 360 - gap_deg * len(order)
 
-    def arc_path(cx, cy, r, start_deg, end_deg):
-        start_rad = math.radians(start_deg - 90)
-        end_rad   = math.radians(end_deg - 90)
-        x1 = cx + r * math.cos(start_rad)
-        y1 = cy + r * math.sin(start_rad)
-        x2 = cx + r * math.cos(end_rad)
-        y2 = cy + r * math.sin(end_rad)
-        large = 1 if (end_deg - start_deg) > 180 else 0
-        return f"M {x1:.2f} {y1:.2f} A {r} {r} 0 {large} 1 {x2:.2f} {y2:.2f}"
+    # Build segments: (key, start_angle, end_angle)
+    segments = []
+    cursor   = -90.0  # start at top
+    for key in order:
+        span = usable * (COMPONENT_CONFIG[key]["weight"] / total_w)
+        segments.append((key, cursor, cursor + span))
+        cursor += span + gap_deg
+
+    def arc_path(a1, a2):
+        a1r = math.radians(a1)
+        a2r = math.radians(a2)
+        x1  = cx + r * math.cos(a1r)
+        y1  = cy + r * math.sin(a1r)
+        x2  = cx + r * math.cos(a2r)
+        y2  = cy + r * math.sin(a2r)
+        lg  = 1 if (a2 - a1) > 180 else 0
+        return f"M {x1:.2f},{y1:.2f} A {r},{r} 0 {lg},1 {x2:.2f},{y2:.2f}"
 
     paths = []
-    for i, key in enumerate(order):
+    for key, a_start, a_end in segments:
         cfg   = COMPONENT_CONFIG[key]
-        r     = radii[i]
         color = cfg["color"]
-        score = component_scores.get(key, 0) or 0   # 0-100
+        score = component_scores.get(key) or 0
+        span  = a_end - a_start
+        fill  = span * (score / 100)
 
-        # Arc spans full 360 minus small gap
-        arc_span = 360 - gap_deg
-        fill_deg = arc_span * (score / 100)
-
-        # Background track
+        # Faded background track
         paths.append(
-            f'<path d="{arc_path(cx, cy, r, 0, arc_span)}" '
-            f'fill="none" stroke="{color}" stroke-width="{stroke_w}" '
-            f'stroke-opacity="0.15" stroke-linecap="round"/>'
+            f'<path d="{arc_path(a_start, a_end)}" fill="none" '
+            f'stroke="{color}" stroke-width="{sw}" stroke-opacity="0.18" stroke-linecap="butt"/>'
         )
         # Filled arc
-        if fill_deg > 1:
+        if fill > 0.5:
             paths.append(
-                f'<path d="{arc_path(cx, cy, r, 0, fill_deg)}" '
-                f'fill="none" stroke="{color}" stroke-width="{stroke_w}" '
-                f'stroke-linecap="round"/>'
+                f'<path d="{arc_path(a_start, a_start + fill)}" fill="none" '
+                f'stroke="{color}" stroke-width="{sw}" stroke-linecap="butt"/>'
             )
 
-    grade_color = GRADE_DESCRIPTIONS.get(grade, ("", "#1A1A1A", ""))[1]
+    grade_color = GRADE_INFO.get(grade, ("#1A1A1A",))[0]
+    inner_r     = r - sw / 2 - 4
 
-    svg = f"""
-    <svg width="{size}" height="{size}" viewBox="0 0 {size} {size}"
-         xmlns="http://www.w3.org/2000/svg">
-      {''.join(paths)}
-      <text x="{cx}" y="{cy - 10}" text-anchor="middle"
-            font-family="'DM Sans', sans-serif"
-            font-size="32" font-weight="600" fill="{grade_color}">{composite:.0f}</text>
-      <text x="{cx}" y="{cy + 16}" text-anchor="middle"
-            font-family="'DM Serif Display', serif"
-            font-size="22" fill="{grade_color}">{grade}</text>
-    </svg>
-    """
-    return svg
+    return f"""<svg width="{size}" height="{size}" viewBox="0 0 {size} {size}" xmlns="http://www.w3.org/2000/svg">
+  {''.join(paths)}
+  <circle cx="{cx}" cy="{cy}" r="{inner_r:.1f}" fill="#FFFFFF"/>
+  <text x="{cx}" y="{cy - 6}" text-anchor="middle"
+        font-family="'DM Sans',sans-serif" font-size="30" font-weight="600"
+        fill="{grade_color}">{composite:.0f}</text>
+  <text x="{cx}" y="{cy + 20}" text-anchor="middle"
+        font-family="'DM Serif Display',serif" font-size="20"
+        fill="{grade_color}">{grade}</text>
+</svg>"""
 
 
-# ── CLEAN INTERPRETATION TEXT ─────────────────────────────────
+# ── CLEAN INTERPRETATION ──────────────────────────────────────
 def clean_interp(text: str) -> str:
     if not text:
         return ""
-    # Strip markdown headers
     text = re.sub(r"^#+\s.*\n?", "", text, flags=re.MULTILINE)
     text = re.sub(r"\*\*.*?\*\*\n?", "", text)
     return text.strip()
 
 
-# ── MAIN APP ──────────────────────────────────────────────────
-st.markdown("""
-<div class="app-header">
-  <div class="app-title">🌿 Respiratory Health Score</div>
-  <div class="app-subtitle">Neighborhood air quality &amp; environmental health intelligence</div>
-</div>
-""", unsafe_allow_html=True)
+# ═══════════════════════════════════════════════════════════════
+# MAIN APP
+# ═══════════════════════════════════════════════════════════════
+st.markdown('<div class="app-title">🌿 Respiratory Health Score</div>', unsafe_allow_html=True)
+st.markdown('<div class="app-sub">Neighborhood air quality &amp; environmental health intelligence</div>', unsafe_allow_html=True)
 
-# Search
 zip_input = st.text_input(
-    "", placeholder="Enter a ZIP code  (e.g. 15213, 90210, 28277)",
+    "", placeholder="Enter a ZIP code  (e.g. 15213, 90210, 28277, 85001)",
     label_visibility="collapsed"
 )
 
 if not zip_input:
     st.markdown("""
     <div class="info-box">
-    Enter any ZIP code in Pittsburgh, Los Angeles, Phoenix, or Charlotte
+    Enter any ZIP code in <strong>Pittsburgh, Los Angeles, Phoenix, or Charlotte</strong>
     to see its Respiratory Health Score — powered by EPA, CDC, and environmental data.
     </div>
     """, unsafe_allow_html=True)
@@ -388,86 +423,80 @@ if not zip_input:
 
 zipcode = zip_input.strip().zfill(5)
 
-# Fetch data
-with st.spinner("Loading score…"):
+with st.spinner("Loading…"):
     score_data  = fetch_score(zipcode)
     interp_data = fetch_interpretation(zipcode)
     zip_meta    = fetch_zip_meta(zipcode)
 
 if not score_data:
     st.markdown(f"""
-    <div class="info-box" style="background:#FFF5F0;color:#8B3A2A;">
+    <div class="error-box">
     No data found for ZIP code <strong>{zipcode}</strong>.
     This MVP covers Pittsburgh, Los Angeles, Phoenix, and Charlotte.
     </div>
     """, unsafe_allow_html=True)
     st.stop()
 
-# ── PARSE DATA ────────────────────────────────────────────────
+# Parse
 composite   = score_data["composite_score"]
 grade       = score_data["score_grade"]
-nat_pct     = score_data.get("national_percentile", 0) or 0
-metro_pct   = score_data.get("metro_percentile", 0) or 0
+nat_pct     = score_data.get("national_percentile") or 0
+metro_pct   = score_data.get("metro_percentile") or 0
 comp_scores = score_data.get("component_scores") or {}
-metro       = score_data.get("metro") or (zip_meta.get("metro") if zip_meta else "")
+metro       = (zip_meta.get("metro") if zip_meta else "") or ""
+metro_title = metro.title() if metro else ""
+
+grade_color, grade_label, grade_desc = GRADE_INFO.get(grade, ("#444", "Unknown", ""))
 
 # ── SCORE CARD ────────────────────────────────────────────────
-grade_label, grade_color, grade_desc = GRADE_DESCRIPTIONS.get(
-    grade, ("Unknown", "#666", "")
-)
+st.markdown('<div class="card">', unsafe_allow_html=True)
+col_disc, col_info = st.columns([1, 1.25], gap="medium")
 
-disc_svg = make_disc_svg(comp_scores, composite, grade)
+with col_disc:
+    st.markdown(make_disc_svg(comp_scores, composite, grade), unsafe_allow_html=True)
 
-col1, col2 = st.columns([1, 1.3], gap="medium")
-
-with col1:
-    st.markdown(disc_svg, unsafe_allow_html=True)
-
-with col2:
+with col_info:
+    metro_tag = f" &middot; {metro_title}" if metro_title else ""
+    metro_pill = f'<span class="pill">Top {100 - int(metro_pct)}% in {metro_title}</span>' if metro_title else ""
     st.markdown(f"""
-    <div style="padding-top:16px;">
-      <div style="font-size:0.82rem;color:#999;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">
-        ZIP {zipcode} · {metro}
+    <div style="padding-top:12px;">
+      <div style="font-size:0.78rem;color:#AAAAAA;text-transform:uppercase;
+                  letter-spacing:0.07em;margin-bottom:6px;">
+        ZIP {zipcode}{metro_tag}
       </div>
-      <div style="font-family:'DM Serif Display',serif;font-size:2rem;color:{grade_color};line-height:1.1;">
+      <div style="font-family:'DM Serif Display',serif;font-size:1.9rem;
+                  color:{grade_color};line-height:1.1;margin-bottom:8px;">
         {grade_label}
       </div>
-      <div style="font-size:0.9rem;color:#555;margin-top:8px;line-height:1.6;">
+      <div style="font-size:0.88rem;color:#555;line-height:1.65;margin-bottom:12px;">
         {grade_desc}
       </div>
-      <div class="pill-row" style="margin-top:14px;">
-        <span class="pill">Top {100 - int(nat_pct)}% nationally</span>
-        <span class="pill">Top {100 - int(metro_pct)}% in {metro}</span>
-      </div>
+      <span class="pill">Top {100 - int(nat_pct)}% nationally</span>
+      {metro_pill}
     </div>
     """, unsafe_allow_html=True)
 
-st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
 
 # ── COMPONENT BREAKDOWN ───────────────────────────────────────
 st.markdown('<div class="card">', unsafe_allow_html=True)
 st.markdown('<div class="section-header">Score Breakdown</div>', unsafe_allow_html=True)
-st.markdown('<div class="section-sub">Four factors combine to form the overall score</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-sub">Four weighted factors combine to form the overall score</div>', unsafe_allow_html=True)
 
 for key, cfg in COMPONENT_CONFIG.items():
-    raw   = comp_scores.get(key)
-    label = cfg["label"]
-    color = cfg["color"]
-    wt    = cfg["weight"]
-    sub   = cfg["sublabel"]
-
+    raw = comp_scores.get(key)
+    wt  = cfg["weight"]
     if raw is not None:
-        component_pts = round(raw * wt / 100, 1)
-        score_str     = f"{component_pts:.0f}/{wt}"
+        score_str = f"{raw * wt / 100:.0f}/{wt}"
     else:
         score_str = "—"
 
     st.markdown(f"""
-    <div class="component-row">
-      <div class="comp-dot" style="background:{color}"></div>
-      <div style="flex:1;">
-        <div class="comp-label">{label}</div>
-        <div class="comp-sublabel">{sub}</div>
+    <div class="comp-row">
+      <div class="comp-dot" style="background:{cfg['color']};"></div>
+      <div class="comp-info">
+        <div class="comp-label">{cfg['label']}</div>
+        <div class="comp-sub">{cfg['sublabel']}</div>
       </div>
       <div class="comp-score">{score_str}</div>
     </div>
@@ -484,7 +513,7 @@ if interp_data:
         st.markdown(f'<div class="interp-text">{clean}</div>', unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-# ── COMPONENT EXPLANATIONS ────────────────────────────────────
+# ── HOW IT'S CALCULATED ───────────────────────────────────────
 st.markdown('<div class="card">', unsafe_allow_html=True)
 st.markdown('<div class="section-header">How the Score Is Calculated</div>', unsafe_allow_html=True)
 st.markdown('<div class="section-sub">Tap any factor to learn more</div>', unsafe_allow_html=True)
@@ -493,26 +522,28 @@ for key, cfg in COMPONENT_CONFIG.items():
     st.markdown(f"""
     <details>
       <summary>
-        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;
-          background:{cfg['color']};margin-right:8px;vertical-align:middle;"></span>
+        <span style="display:inline-block;width:9px;height:9px;border-radius:50%;
+              background:{cfg['color']};flex-shrink:0;"></span>
         <strong>{cfg['label']}</strong>
-        <span style="color:#999;font-weight:400;"> · {cfg['weight']}% of total</span>
+        <span style="color:#AAAAAA;font-weight:400;font-size:0.82rem;margin-left:4px;">
+          · {cfg['weight']}% of total
+        </span>
       </summary>
-      <div style="padding:10px 0 6px 22px;font-size:0.88rem;color:#555;line-height:1.65;">
-        {cfg['explain']}
-      </div>
+      <div>{cfg['explain']}</div>
     </details>
     """, unsafe_allow_html=True)
 
 st.markdown("""
 <details>
-  <summary><strong>Grade Scale</strong></summary>
-  <div style="padding:10px 0 6px 22px;font-size:0.88rem;color:#555;line-height:1.9;">
-    <strong style="color:#2D7D46">A (70–100)</strong> — Excellent respiratory health environment<br>
-    <strong style="color:#5A9E6F">B (55–69)</strong> — Above average air quality conditions<br>
-    <strong style="color:#C8882A">C (40–54)</strong> — Moderate conditions; some concerns<br>
-    <strong style="color:#C85A2A">D (25–39)</strong> — Elevated pollution and health burden<br>
-    <strong style="color:#B02020">F (0–24)</strong> — Significant respiratory health risks
+  <summary>
+    <strong>Grade Scale</strong>
+  </summary>
+  <div style="line-height:2.1;">
+    <span style="color:#1A6B3C;font-weight:700;">A (70–100)</span> — Excellent respiratory health environment<br>
+    <span style="color:#3A8C5C;font-weight:700;">B (55–69)</span>  — Above average air quality conditions<br>
+    <span style="color:#B87A1A;font-weight:700;">C (40–54)</span>  — Moderate conditions; some concerns<br>
+    <span style="color:#C05020;font-weight:700;">D (25–39)</span>  — Elevated pollution and health burden<br>
+    <span style="color:#A01818;font-weight:700;">F (0–24)</span>   — Significant respiratory health risks
   </div>
 </details>
 """, unsafe_allow_html=True)
@@ -521,35 +552,40 @@ st.markdown("</div>", unsafe_allow_html=True)
 
 # ── METRO COMPARISON ──────────────────────────────────────────
 if metro:
-    with st.expander(f"📊  Compare to other ZIP codes in {metro}"):
-        peers = fetch_metro_peers(metro, limit=15)
-        if peers:
+    with st.expander(f"📊  Compare to other ZIP codes in {metro_title}"):
+        with st.spinner("Loading metro data…"):
+            peers = fetch_metro_peers(metro, limit=15)
+
+        if not peers:
+            st.markdown(
+                '<div style="color:#AAA;font-size:0.88rem;padding:8px 0;">No peer data available.</div>',
+                unsafe_allow_html=True
+            )
+        else:
             max_score = max(p["composite_score"] for p in peers)
-            st.markdown('<div style="margin-top:8px">', unsafe_allow_html=True)
             for p in peers:
-                z        = p["zipcode"]
-                s        = p["composite_score"]
-                g        = p["score_grade"]
-                bar_pct  = int((s / max_score) * 100) if max_score else 0
-                is_curr  = "font-weight:700;" if z == zipcode else ""
-                bg_color = GRADE_DESCRIPTIONS.get(g, ("", "#888", ""))[1]
-                highlight = "background:#F0F5F2;border-radius:8px;padding:0 6px;" if z == zipcode else ""
+                z       = p["zipcode"]
+                s       = p["composite_score"]
+                g       = p["score_grade"]
+                bar_pct = int((s / max_score) * 100) if max_score else 0
+                g_color = GRADE_INFO.get(g, ("#888",))[0]
+                bold    = "font-weight:700;" if z == zipcode else ""
+                hi      = "background:#F0F8F3;border-radius:8px;padding:2px 6px;" if z == zipcode else ""
 
                 st.markdown(f"""
-                <div class="metro-row" style="{highlight}">
-                  <div class="metro-zip" style="{is_curr}">{z}</div>
+                <div class="metro-row" style="{hi}">
+                  <div class="metro-zip" style="{bold}">{z}</div>
                   <div class="metro-bar-wrap">
-                    <div class="metro-bar" style="width:{bar_pct}%;background:{bg_color}"></div>
+                    <div class="metro-bar" style="width:{bar_pct}%;background:{g_color};"></div>
                   </div>
                   <div class="metro-score">{s:.0f}</div>
-                  <div class="metro-grade" style="color:{bg_color}">{g}</div>
+                  <div class="metro-grade" style="color:{g_color};">{g}</div>
                 </div>
                 """, unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
 
 # ── FOOTER ────────────────────────────────────────────────────
 st.markdown("""
-<div style="text-align:center;margin-top:2rem;font-size:0.78rem;color:#BBB;">
-  LaSalle Technologies · Data: EPA AQS, CDC PLACES, EJScreen, NLCD · 2023
+<div style="text-align:center;margin-top:2.5rem;font-size:0.75rem;color:#CCCCCC;">
+  LaSalle Technologies &nbsp;·&nbsp; Data: EPA AQS, CDC PLACES, EJScreen, NLCD &nbsp;·&nbsp; 2023
 </div>
 """, unsafe_allow_html=True)
