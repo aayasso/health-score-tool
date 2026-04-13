@@ -7,6 +7,10 @@
 
 # %% [markdown]
 # ## 0 · Setup & Configuration
+#
+# **IF ANY CELL IN THIS NOTEBOOK FAILS:** Stop immediately. Do not debug manually in Colab.
+# Copy the full error traceback and bring it to Claude Code for diagnosis. Manual Colab fixes
+# often introduce silent regressions that are harder to trace later.
 
 # %%
 # ── Installs (run once per Colab session) ────────────────────
@@ -190,25 +194,39 @@ def assign_grade(score: float) -> str:
 
 # %% [markdown]
 # ## 2 · CDC PLACES Ingestion (Physical Inactivity + CHD)
+#
+# **If this section fails:** Stop, copy the error, bring it to Claude Code. Common issues:
+# API format changes (fields renamed), rate limits (HTTP 429), or ZIP matching failures.
+# Do NOT try to patch the query manually — the API schema has changed before (see CONTEXT.md).
 
 # %%
 log("START", "Ingesting CDC PLACES data for LPA and CHD")
 
 CDC_BASE_URL = "https://data.cdc.gov/resource/c7b2-4ecy.json"
 
-def fetch_cdc_places_batch(zip_codes: list, measure_ids: list, batch_size: int = 100) -> list:
+# CDC PLACES API is now WIDE format (as of 2024+):
+#   - One row per ZCTA, with separate columns for each measure
+#   - ZIP field is "zcta5" (not "locationname")
+#   - No "measureid" column — measures are column names like "lpa_crudeprev", "chd_crudeprev"
+#   - Use $select to request only needed columns, $where to filter by zcta5
+#   - Batch size 50 ZIPs per request to stay within Socrata URL length limits
+
+def fetch_cdc_places_wide(zip_codes: list, select_cols: list, batch_size: int = 50) -> list:
     """
-    Fetch CDC PLACES data in batches to avoid Socrata query limits.
-    Returns list of raw row dicts from the API.
+    Fetch CDC PLACES data in wide format, batching by ZIP to avoid URL length limits.
+    select_cols: columns to request, e.g. ["zcta5", "lpa_crudeprev", "chd_crudeprev"]
+    Returns list of raw row dicts (one row per ZIP, already wide).
     """
     all_rows = []
+    select_str = ",".join(select_cols)
+
     for i in range(0, len(zip_codes), batch_size):
         batch_zips = zip_codes[i:i + batch_size]
         zip_list = ", ".join(f"'{z}'" for z in batch_zips)
-        measure_list = ", ".join(f"'{m}'" for m in measure_ids)
 
         params = {
-            "$where": f"locationname IN ({zip_list}) AND measureid IN ({measure_list})",
+            "$select": select_str,
+            "$where": f"zcta5 IN ({zip_list})",
             "$limit": 50000,
         }
 
@@ -232,41 +250,32 @@ def fetch_cdc_places_batch(zip_codes: list, measure_ids: list, batch_size: int =
     return all_rows
 
 # %%
-# Fetch both measures — verify measureid values against API first
-# CDC PLACES uses short measure IDs: "LPA" for physical inactivity, "CHD" for coronary heart disease
-MEASURE_IDS = ["LPA", "CHD"]
+# Fetch LPA (physical inactivity) and CHD (coronary heart disease) in wide format
+CDC_SELECT_COLS = ["zcta5", "lpa_crudeprev", "chd_crudeprev"]
 
-log("INFO", f"Fetching CDC PLACES for measures: {MEASURE_IDS}")
-log("INFO", f"Total ZIPs to query: {len(ALL_ZIPS)}")
+log("INFO", f"Fetching CDC PLACES (wide format) for columns: {CDC_SELECT_COLS}")
+log("INFO", f"Total ZIPs to query: {len(ALL_ZIPS)}, batch size: 50")
 
-raw_cdc = fetch_cdc_places_batch(ALL_ZIPS, MEASURE_IDS)
+raw_cdc = fetch_cdc_places_wide(ALL_ZIPS, CDC_SELECT_COLS, batch_size=50)
 log("INFO", f"Total CDC rows received: {len(raw_cdc)}")
 
 # %%
-# Parse into structured DataFrame
+# Parse wide-format response — already one row per ZIP, no pivot needed
 df_cdc = pd.DataFrame(raw_cdc)
 
-# Check what columns/values we actually got
 log("INFO", f"CDC response columns: {list(df_cdc.columns)}")
-log("INFO", f"Unique measureid values: {df_cdc['measureid'].unique().tolist() if 'measureid' in df_cdc.columns else 'N/A'}")
 
-# %%
-# Pivot: one row per ZIP with lpa_raw and chd_raw columns
-# data_value is the crude prevalence percentage
+# Rename to our internal column names
+df_cdc["zcta5"] = df_cdc["zcta5"].astype(str).str.strip()
+df_cdc["lpa_crudeprev"] = pd.to_numeric(df_cdc["lpa_crudeprev"], errors="coerce")
+df_cdc["chd_crudeprev"] = pd.to_numeric(df_cdc["chd_crudeprev"], errors="coerce")
 
-df_cdc["data_value"] = pd.to_numeric(df_cdc["data_value"], errors="coerce")
-df_cdc["locationname"] = df_cdc["locationname"].astype(str).str.strip()
-
-df_lpa = df_cdc[df_cdc["measureid"] == "LPA"][["locationname", "data_value"]].copy()
-df_lpa = df_lpa.rename(columns={"locationname": "zipcode", "data_value": "physical_inactivity_raw"})
-df_lpa = df_lpa.drop_duplicates(subset=["zipcode"], keep="first")
-
-df_chd = df_cdc[df_cdc["measureid"] == "CHD"][["locationname", "data_value"]].copy()
-df_chd = df_chd.rename(columns={"locationname": "zipcode", "data_value": "chd_raw"})
-df_chd = df_chd.drop_duplicates(subset=["zipcode"], keep="first")
-
-# Merge on zipcode
-df_cardio = df_lpa.merge(df_chd, on="zipcode", how="outer")
+df_cardio = df_cdc.rename(columns={
+    "zcta5": "zipcode",
+    "lpa_crudeprev": "physical_inactivity_raw",
+    "chd_crudeprev": "chd_raw",
+})
+df_cardio = df_cardio.drop_duplicates(subset=["zipcode"], keep="first")
 
 # Add metro from master ZIP list
 df_cardio["metro"] = df_cardio["zipcode"].map(ZIP_METRO_MAP)
@@ -280,6 +289,10 @@ log("INFO", f"  CHD coverage: {df_cardio['chd_raw'].notna().sum()} ZIPs")
 
 # %% [markdown]
 # ## 3 · BTS Noise Raster Processing
+#
+# **If this section fails:** Stop, copy the error, bring it to Claude Code. Common issues:
+# CRS mismatch between raster and shapefile, out-of-memory on merge (solved by per-state
+# processing below), or missing raster files on Drive. Do NOT attempt manual raster debugging.
 
 # %%
 log("START", "Processing BTS Transportation Noise raster")
@@ -311,96 +324,79 @@ noise_already_done = raster_already_processed("bts_noise")
 # 3. Set NOISE_RASTER_PATH below to the file location
 
 import rasterio
-from rasterio.merge import merge as rasterio_merge
 from rasterstats import zonal_stats
-import tempfile
 import os
 
 # ── Paths (update these in Colab) ────────────────────────────
 # BTS noise downloaded as individual state rasters, not a single CONUS file.
-# One file per pilot-metro state: PA (Pittsburgh), CA (Los Angeles), AZ (Phoenix), NC (Charlotte).
-NOISE_RASTER_PATHS = [
-    "/content/drive/MyDrive/health-score-data/PA_rail_road_and_aviation_noise_2020.tif",  # UPDATE THIS
-    "/content/drive/MyDrive/health-score-data/CA_rail_road_and_aviation_noise_2020.tif",  # UPDATE THIS
-    "/content/drive/MyDrive/health-score-data/AZ_rail_road_and_aviation_noise_2020.tif",  # UPDATE THIS
-    "/content/drive/MyDrive/health-score-data/NC_rail_road_and_aviation_noise_2020.tif",  # UPDATE THIS
-]
-ZCTA_SHAPEFILE_PATH = "/content/drive/MyDrive/health-score-data/tl_2020_us_zcta520.shp"  # UPDATE THIS
+# IMPORTANT: Process each state separately to avoid RAM crashes from merging large rasters.
+# Each state raster is matched to its metro ZIPs via STATE_METRO_MAP below.
+DRIVE_PREFIX = "/content/drive/MyDrive/Colab Notebooks/health-score-data"
+
+STATE_NOISE_RASTERS = {
+    "PA": f"{DRIVE_PREFIX}/PA_rail_road_and_aviation_noise_2020.tif",
+    "CA": f"{DRIVE_PREFIX}/CA_rail_road_and_aviation_noise_2020.tif",
+    "AZ": f"{DRIVE_PREFIX}/AZ_rail_road_and_aviation_noise_2020.tif",
+    "NC": f"{DRIVE_PREFIX}/NC_rail_road_and_aviation_noise_2020.tif",
+}
+
+# Map each state to the metros whose ZIPs fall within that state's raster
+STATE_METRO_MAP = {
+    "PA": ["Pittsburgh"],
+    "CA": ["Los Angeles"],
+    "AZ": ["Phoenix"],
+    "NC": ["Charlotte"],
+}
+
+ZCTA_SHAPEFILE_PATH = f"{DRIVE_PREFIX}/tl_2020_us_zcta520.shp"
 
 if not noise_already_done:
     log("INFO", f"Loading ZCTA shapefile from {ZCTA_SHAPEFILE_PATH}")
     gdf_zcta = gpd.read_file(ZCTA_SHAPEFILE_PATH)
 
-    # Filter to our 600 ZIPs
-    # ZCTA field is ZCTA5CE20 (2020 vintage) or ZCTA5CE10 (2010)
-    zcta_col = "ZCTA5CE20" if "ZCTA5CE20" in gdf_zcta.columns else "ZCTA5CE10"
-    gdf_zcta = gdf_zcta[gdf_zcta[zcta_col].isin(ALL_ZIPS)].copy()
-    gdf_zcta = gdf_zcta.rename(columns={zcta_col: "zipcode"})
+    # ZCTA 2020 vintage uses ZCTA5CE20 column
+    gdf_zcta = gdf_zcta[gdf_zcta["ZCTA5CE20"].isin(ALL_ZIPS)].copy()
+    gdf_zcta = gdf_zcta.rename(columns={"ZCTA5CE20": "zipcode"})
     log("INFO", f"  Filtered ZCTA to {len(gdf_zcta)} of our ZIPs")
 
-    # ── Merge 4 state rasters into one temporary file ─────────
-    # rasterstats requires a file path, so we merge to a temp GeoTIFF.
-    log("INFO", "  Merging 4 state noise rasters (PA, CA, AZ, NC)...")
-    src_files = []
-    raster_crs = None
-    raster_nodata = None
-    try:
-        for path in NOISE_RASTER_PATHS:
-            src = rasterio.open(path)
-            src_files.append(src)
-            log("INFO", f"    Opened {os.path.basename(path)} — CRS: {src.crs}, shape: {src.shape}, nodata: {src.nodata}")
-            if raster_crs is None:
-                raster_crs = src.crs
-                raster_nodata = src.nodata
-            elif src.crs != raster_crs:
-                log("WARN", f"    CRS mismatch: {os.path.basename(path)} has {src.crs}, expected {raster_crs}")
+    # ── Process each state raster separately to avoid RAM crashes ─
+    # Instead of merging 4 large rasters, we run zonal_stats per state
+    # on only the ZIPs belonging to that state's metros.
+    log("INFO", "  Processing noise rasters per state (PA, CA, AZ, NC)...")
+    noise_parts = []
 
-        merged_array, merged_transform = rasterio_merge(src_files)
-        log("INFO", f"  Merged raster shape: {merged_array.shape}")
-    finally:
-        for src in src_files:
-            src.close()
+    for state, raster_path in STATE_NOISE_RASTERS.items():
+        metros_in_state = STATE_METRO_MAP[state]
+        state_zips = [z for z, m in ZIP_METRO_MAP.items() if m in metros_in_state]
+        gdf_state = gdf_zcta[gdf_zcta["zipcode"].isin(state_zips)].copy()
 
-    # Write merged raster to a temp file for rasterstats
-    merged_tmp = tempfile.NamedTemporaryFile(suffix=".tif", delete=False)
-    merged_tmp_path = merged_tmp.name
-    merged_tmp.close()
+        if gdf_state.empty:
+            log("WARN", f"    {state}: no matching ZIPs — skipping")
+            continue
 
-    merged_meta = {
-        "driver": "GTiff",
-        "height": merged_array.shape[1],
-        "width": merged_array.shape[2],
-        "count": merged_array.shape[0],
-        "dtype": merged_array.dtype,
-        "crs": raster_crs,
-        "transform": merged_transform,
-    }
-    if raster_nodata is not None:
-        merged_meta["nodata"] = raster_nodata
+        log("INFO", f"    {state}: {len(gdf_state)} ZIPs, raster: {os.path.basename(raster_path)}")
 
-    with rasterio.open(merged_tmp_path, "w", **merged_meta) as dst:
-        dst.write(merged_array)
-    log("INFO", f"  Wrote merged raster to temp file: {merged_tmp_path}")
+        with rasterio.open(raster_path) as src:
+            state_crs = src.crs
+            state_nodata = src.nodata
+            log("INFO", f"      CRS: {state_crs}, shape: {src.shape}, nodata: {state_nodata}")
 
-    gdf_zcta = gdf_zcta.to_crs(raster_crs)
+        gdf_state = gdf_state.to_crs(state_crs)
 
-    # Zonal statistics: mean noise level (dB) per ZIP polygon
-    log("INFO", "  Running zonal statistics for BTS noise (this may take several minutes)...")
-    nodata_val = raster_nodata if raster_nodata is not None else -9999
-    noise_stats = zonal_stats(
-        gdf_zcta,
-        merged_tmp_path,
-        stats=["mean"],
-        geojson_out=False,
-        nodata=nodata_val,
-    )
+        nodata_val = state_nodata if state_nodata is not None else -9999
+        stats = zonal_stats(
+            gdf_state,
+            raster_path,
+            stats=["mean"],
+            geojson_out=False,
+            nodata=nodata_val,
+        )
 
-    # Clean up temp file
-    os.unlink(merged_tmp_path)
-    log("INFO", "  Cleaned up temp merged raster file")
+        gdf_state["noise_raw"] = [s["mean"] for s in stats]
+        noise_parts.append(gdf_state[["zipcode", "noise_raw"]])
+        log("INFO", f"      Done — {gdf_state['noise_raw'].notna().sum()} ZIPs with data")
 
-    gdf_zcta["noise_raw"] = [s["mean"] for s in noise_stats]
-    df_noise = gdf_zcta[["zipcode", "noise_raw"]].copy()
+    df_noise = pd.concat(noise_parts, ignore_index=True)
 
     # Drop rows where raster had no data for the ZIP polygon
     null_noise = df_noise["noise_raw"].isna().sum()
@@ -451,6 +447,10 @@ else:
 
 # %% [markdown]
 # ## 4 · NLCD Impervious Surface Raster Processing
+#
+# **If this section fails:** Stop, copy the error, bring it to Claude Code. Common issues:
+# nodata value mismatch (must be 250.0, not 255), CRS reprojection errors, or Colab RAM limits
+# on the CONUS raster. Do NOT change the nodata value without confirming against the raster metadata.
 
 # %%
 log("START", "Processing NLCD Impervious Surface raster")
@@ -459,16 +459,16 @@ impervious_already_done = raster_already_processed("nlcd_impervious")
 
 # %%
 # ── Paths (update in Colab) ──────────────────────────────────
-IMPERVIOUS_RASTER_PATH = "/content/drive/MyDrive/health-score-data/nlcd_impervious.tif"  # UPDATE THIS
+IMPERVIOUS_RASTER_PATH = f"{DRIVE_PREFIX}/nlcd_impervious.tif"
 
 if not impervious_already_done:
     # Reuse ZCTA if already loaded, otherwise reload
     if "gdf_zcta" not in dir() or gdf_zcta is None:
         log("INFO", f"  Reloading ZCTA shapefile...")
         gdf_zcta = gpd.read_file(ZCTA_SHAPEFILE_PATH)
-        zcta_col = "ZCTA5CE20" if "ZCTA5CE20" in gdf_zcta.columns else "ZCTA5CE10"
-        gdf_zcta = gdf_zcta[gdf_zcta[zcta_col].isin(ALL_ZIPS)].copy()
-        gdf_zcta = gdf_zcta.rename(columns={zcta_col: "zipcode"})
+        # ZCTA 2020 vintage uses ZCTA5CE20 column
+        gdf_zcta = gdf_zcta[gdf_zcta["ZCTA5CE20"].isin(ALL_ZIPS)].copy()
+        gdf_zcta = gdf_zcta.rename(columns={"ZCTA5CE20": "zipcode"})
 
     with rasterio.open(IMPERVIOUS_RASTER_PATH) as src:
         imp_crs = src.crs
@@ -482,7 +482,7 @@ if not impervious_already_done:
         IMPERVIOUS_RASTER_PATH,
         stats=["mean"],
         geojson_out=False,
-        nodata=255,  # NLCD nodata value
+        nodata=250.0,  # NLCD impervious nodata value (250.0, not 255 — confirmed from raster metadata)
     )
 
     gdf_imp["impervious_raw"] = [s["mean"] for s in imp_stats]
@@ -535,6 +535,9 @@ else:
 
 # %% [markdown]
 # ## 5 · Merge All Components
+#
+# **If this section fails:** Stop, copy the error, bring it to Claude Code. Merge failures
+# usually mean a ZIP column mismatch between data sources or an unexpected null pattern.
 
 # %%
 log("START", "Merging all four components into a single DataFrame")
@@ -640,6 +643,9 @@ require_all_pass("CARDIOVASCULAR — INGESTION", suite1_passed)
 # ## 6 · Normalization
 # Min-max normalization, global across all 600 ZIPs.
 # All 4 components are **inverted** (higher raw = worse health environment).
+#
+# **If this section fails:** Stop, copy the error, bring it to Claude Code. Normalization
+# failures typically mean a column has all-null or constant values from a broken ingestion step.
 
 # %%
 log("START", "Normalizing all four components")
@@ -730,6 +736,9 @@ require_all_pass("CARDIOVASCULAR — NORMALIZATION", suite2_passed)
 
 # %% [markdown]
 # ## 7 · Composite Scoring & Letter Grades
+#
+# **If this section fails:** Stop, copy the error, bring it to Claude Code. Scoring failures
+# usually mean nulls leaked through normalization — check the Suite 2 gate output above.
 
 # %%
 log("START", "Computing composite scores and letter grades")
@@ -832,6 +841,9 @@ require_all_pass("CARDIOVASCULAR — SCORING", suite3_passed)
 
 # %% [markdown]
 # ## 8 · Claude API Interpretations
+#
+# **If this section fails:** Stop, copy the error, bring it to Claude Code. Common issues:
+# missing ANTHROPIC_API_KEY in Colab secrets, rate limits (429), or model string changes.
 
 # %%
 log("START", "Generating Claude API interpretations for all ZIPs")
@@ -912,6 +924,10 @@ else:
 
 # %% [markdown]
 # ## 9 · Supabase Upsert
+#
+# **If this section fails:** Stop, copy the error, bring it to Claude Code. Common issues:
+# column name mismatch between local dict keys and Supabase schema, or missing UNIQUE constraint.
+# Do NOT modify the Supabase schema manually — bring the error here first.
 
 # %%
 log("START", "Upserting all records to cardiovascular_scores")

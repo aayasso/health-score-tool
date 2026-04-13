@@ -16,7 +16,7 @@
 - 600 ZIP codes confirmed across Pittsburgh, LA, Phoenix, Charlotte
 
 ### What's In Progress
-- Cardiovascular pipeline script ready — needs Colab execution with raster files
+- Cardiovascular pipeline script corrected with Colab-tested fixes — ready for re-execution
 - Cardiovascular Streamlit tab built — needs data in Supabase before it will display
 
 ### What's Blocked / At Risk
@@ -145,6 +145,63 @@ A neighborhood-level health environment scoring system measuring the environment
 
 **Any issues or surprises:**
 - BTS noise data comes as individual state rasters, not a single CONUS file — required merge step added to pipeline
+
+### 2026-04-13 — Tool 2 Cardiovascular (Pipeline Corrections from Colab Run)
+**Completed:**
+- Applied 5 corrections to `notebooks/cardiovascular/cardiovascular_pipeline.py` based on actual Colab execution findings:
+  1. **CDC PLACES API → wide format:** API no longer returns `locationname`/`measureid` columns. ZIP field is `zcta5`. Measures are column names (`lpa_crudeprev`, `chd_crudeprev`). Rewrote fetch function to use `$select` + `$where=zcta5 IN (...)` with batch size 50.
+  2. **BTS noise → per-state processing:** Merging 4 state rasters crashed Colab RAM. Replaced merge approach with `STATE_METRO_MAP` that filters ZIPs per state and runs `zonal_stats` on each state raster independently.
+  3. **NLCD impervious nodata → 250.0:** The correct nodata value is 250.0, not 255.
+  4. **ZCTA shapefile column → ZCTA5CE20:** Removed fallback to `ZCTA5CE10` — we use the 2020 vintage shapefile.
+  5. **Google Drive paths → correct prefix:** Updated to `/content/drive/MyDrive/Colab Notebooks/health-score-data/` (note space in "Colab Notebooks").
+- Added failure-handling comments to every major pipeline section directing users to bring errors to Claude Code rather than debugging manually in Colab.
+- Updated TOOL_SPECS.md CDC PLACES reference section.
+
+**Left off at:**
+- Pipeline script corrected, ready for Colab re-execution.
+
+**Next session should start with:**
+1. Execute corrected pipeline in Colab — each gate must pass before proceeding
+2. After pipeline completes, verify Streamlit cardiovascular tab renders correctly
+3. Run Suite 5 manual Streamlit smoke tests
+
+**Any issues or surprises:**
+- CDC PLACES API changed from long format (one row per measure per ZIP) to wide format (one row per ZIP with measure columns). This is a breaking change that will affect Tools 3–5. See Lessons Learned below.
+
+---
+
+## Lessons Learned — Inherited by Tools 3–5
+
+> These corrections were discovered during the Cardiovascular (Tool 2) Colab run.
+> All subsequent tools MUST follow these patterns. Do not repeat the original assumptions.
+
+### 1. CDC PLACES API is Wide Format
+- **Wrong:** `$where=locationname IN (...) AND measureid IN (...)`
+- **Right:** `$select=zcta5,measure1_crudeprev,measure2_crudeprev` + `$where=zcta5 IN (...)`
+- The ZIP field is `zcta5`, not `locationname`. There is no `measureid` column.
+- Each measure is a separate column (e.g., `lpa_crudeprev`, `chd_crudeprev`, `depression_crudeprev`).
+- Use batch size 50 to stay within Socrata URL length limits.
+- Response is already one row per ZIP — no pivot needed.
+
+### 2. BTS Noise Raster: Per-State, Not Merged
+- BTS data comes as individual state rasters, not a single CONUS GeoTIFF.
+- **Do NOT merge state rasters** — this crashes Colab free-tier RAM.
+- Use `STATE_METRO_MAP` to filter ZIPs per state, then run `zonal_stats` per state independently.
+- Tool 3 (Stress) reuses noise values from `raw_signals` table — no raster processing needed.
+
+### 3. NLCD Impervious Surface Nodata = 250.0
+- The correct nodata value for NLCD impervious surface rasters is `250.0`, not `255`.
+- Tool 5 (Heat) reuses impervious values from `raw_signals` — no raster processing needed.
+- If Tool 3 or 5 processes a new NLCD raster (e.g., tree canopy), check its nodata value from raster metadata before hardcoding.
+
+### 4. ZCTA Shapefile Column = ZCTA5CE20
+- The 2020 ZCTA shapefile uses column `ZCTA5CE20` for the ZIP/ZCTA code.
+- Do not use `ZCTA5CE10` (2010 vintage) — our shapefile is 2020.
+
+### 5. Google Drive Path Prefix
+- All raster and shapefile paths in Colab use:
+  `/content/drive/MyDrive/Colab Notebooks/health-score-data/`
+- Note the space in "Colab Notebooks" — this is the actual folder name on Drive.
 
 ---
 
