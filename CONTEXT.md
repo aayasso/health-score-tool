@@ -16,7 +16,8 @@
 - 600 ZIP codes confirmed across Pittsburgh, LA, Phoenix, Charlotte
 
 ### What's In Progress
-- Cardiovascular data ingestion (CDC PLACES components confirmed, raster processing TBD)
+- Cardiovascular pipeline script ready — needs Colab execution with raster files
+- Cardiovascular Streamlit tab built — needs data in Supabase before it will display
 
 ### What's Blocked / At Risk
 - BTS noise raster processing is the highest-risk step — rasterio setup in Colab must be validated before proceeding
@@ -87,6 +88,39 @@ A neighborhood-level health environment scoring system measuring the environment
 **Any issues or surprises:**
 - 
 ```
+
+### 2026-04-13 — Tool 2 Cardiovascular (Pipeline & UI Build)
+**Completed:**
+- Full cardiovascular pipeline script: `notebooks/cardiovascular/cardiovascular_pipeline.py` (980 lines)
+  - CDC PLACES ingestion (LPA + CHD) with Socrata batch fetching
+  - BTS noise raster processing with zonal stats → writes to `raw_signals` for Stress tool reuse
+  - NLCD impervious surface raster processing → writes to `raw_signals` for Heat tool reuse
+  - Min-max normalization (all 4 components inverted)
+  - Composite scoring + letter grade assignment
+  - Claude API interpretation generation (600 ZIPs, rate-limited)
+  - Supabase upsert to `cardiovascular_scores`
+  - All 4 test suite gates embedded (Ingestion, Normalization, Scoring, Supabase Write)
+- Supabase CREATE TABLE SQL: `notebooks/cardiovascular/create_table.sql`
+- Streamlit UI: modified `app.py` to add `st.tabs()` with Respiratory + Cardiovascular tabs
+  - Cardiovascular tab matches Respiratory pattern exactly (disc viz, component breakdown, interpretation, metro comparison)
+  - Red/Pink color palette applied
+  - Queries `cardiovascular_scores` table directly (all data in one table, unlike Respiratory's split across `composite_scores` + `interpretations`)
+
+**Left off at:**
+- Pipeline script is written but not yet executed — needs Colab with raster files and Supabase credentials
+
+**Next session should start with:**
+1. Run `create_table.sql` in Supabase SQL Editor
+2. Upload to Google Drive: BTS noise GeoTIFF, NLCD impervious GeoTIFF, ZCTA shapefile
+3. Update 3 file paths in pipeline script (NOISE_RASTER_PATH, IMPERVIOUS_RASTER_PATH, ZCTA_SHAPEFILE_PATH)
+4. Execute pipeline cells sequentially in Colab — each gate must pass before proceeding
+5. After pipeline completes, verify Streamlit cardiovascular tab renders correctly
+6. Run Suite 5 manual Streamlit smoke tests
+
+**Any issues or surprises:**
+- `notebooks/respiratory/` directory does not exist in repo — Respiratory reference is only `app.py`
+- Respiratory tab queries `composite_scores` + `interpretations` tables (separate); Cardiovascular stores everything in `cardiovascular_scores` (single table) — minor schema divergence, works fine but worth noting
+- Respiratory grade scale in the UI showed non-standard thresholds (70–100, 55–69, etc.); updated Cardiovascular to use the correct scale from AGENTS.md (≥80, 65–79, 50–64, 35–49, <35)
 
 ---
 
