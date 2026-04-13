@@ -311,10 +311,20 @@ noise_already_done = raster_already_processed("bts_noise")
 # 3. Set NOISE_RASTER_PATH below to the file location
 
 import rasterio
+from rasterio.merge import merge as rasterio_merge
 from rasterstats import zonal_stats
+import tempfile
+import os
 
 # ── Paths (update these in Colab) ────────────────────────────
-NOISE_RASTER_PATH = "/content/drive/MyDrive/health-score-data/bts_noise_dnl.tif"  # UPDATE THIS
+# BTS noise downloaded as individual state rasters, not a single CONUS file.
+# One file per pilot-metro state: PA (Pittsburgh), CA (Los Angeles), AZ (Phoenix), NC (Charlotte).
+NOISE_RASTER_PATHS = [
+    "/content/drive/MyDrive/health-score-data/PA_rail_road_and_aviation_noise_2020.tif",  # UPDATE THIS
+    "/content/drive/MyDrive/health-score-data/CA_rail_road_and_aviation_noise_2020.tif",  # UPDATE THIS
+    "/content/drive/MyDrive/health-score-data/AZ_rail_road_and_aviation_noise_2020.tif",  # UPDATE THIS
+    "/content/drive/MyDrive/health-score-data/NC_rail_road_and_aviation_noise_2020.tif",  # UPDATE THIS
+]
 ZCTA_SHAPEFILE_PATH = "/content/drive/MyDrive/health-score-data/tl_2020_us_zcta520.shp"  # UPDATE THIS
 
 if not noise_already_done:
@@ -328,23 +338,66 @@ if not noise_already_done:
     gdf_zcta = gdf_zcta.rename(columns={zcta_col: "zipcode"})
     log("INFO", f"  Filtered ZCTA to {len(gdf_zcta)} of our ZIPs")
 
-    # Ensure CRS matches raster
-    with rasterio.open(NOISE_RASTER_PATH) as src:
-        raster_crs = src.crs
-        log("INFO", f"  Raster CRS: {raster_crs}")
-        log("INFO", f"  Raster shape: {src.shape}")
+    # ── Merge 4 state rasters into one temporary file ─────────
+    # rasterstats requires a file path, so we merge to a temp GeoTIFF.
+    log("INFO", "  Merging 4 state noise rasters (PA, CA, AZ, NC)...")
+    src_files = []
+    raster_crs = None
+    raster_nodata = None
+    try:
+        for path in NOISE_RASTER_PATHS:
+            src = rasterio.open(path)
+            src_files.append(src)
+            log("INFO", f"    Opened {os.path.basename(path)} — CRS: {src.crs}, shape: {src.shape}, nodata: {src.nodata}")
+            if raster_crs is None:
+                raster_crs = src.crs
+                raster_nodata = src.nodata
+            elif src.crs != raster_crs:
+                log("WARN", f"    CRS mismatch: {os.path.basename(path)} has {src.crs}, expected {raster_crs}")
+
+        merged_array, merged_transform = rasterio_merge(src_files)
+        log("INFO", f"  Merged raster shape: {merged_array.shape}")
+    finally:
+        for src in src_files:
+            src.close()
+
+    # Write merged raster to a temp file for rasterstats
+    merged_tmp = tempfile.NamedTemporaryFile(suffix=".tif", delete=False)
+    merged_tmp_path = merged_tmp.name
+    merged_tmp.close()
+
+    merged_meta = {
+        "driver": "GTiff",
+        "height": merged_array.shape[1],
+        "width": merged_array.shape[2],
+        "count": merged_array.shape[0],
+        "dtype": merged_array.dtype,
+        "crs": raster_crs,
+        "transform": merged_transform,
+    }
+    if raster_nodata is not None:
+        merged_meta["nodata"] = raster_nodata
+
+    with rasterio.open(merged_tmp_path, "w", **merged_meta) as dst:
+        dst.write(merged_array)
+    log("INFO", f"  Wrote merged raster to temp file: {merged_tmp_path}")
 
     gdf_zcta = gdf_zcta.to_crs(raster_crs)
 
     # Zonal statistics: mean noise level (dB) per ZIP polygon
     log("INFO", "  Running zonal statistics for BTS noise (this may take several minutes)...")
+    nodata_val = raster_nodata if raster_nodata is not None else -9999
     noise_stats = zonal_stats(
         gdf_zcta,
-        NOISE_RASTER_PATH,
+        merged_tmp_path,
         stats=["mean"],
         geojson_out=False,
-        nodata=-9999,
+        nodata=nodata_val,
     )
+
+    # Clean up temp file
+    os.unlink(merged_tmp_path)
+    log("INFO", "  Cleaned up temp merged raster file")
 
     gdf_zcta["noise_raw"] = [s["mean"] for s in noise_stats]
     df_noise = gdf_zcta[["zipcode", "noise_raw"]].copy()

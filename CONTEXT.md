@@ -122,6 +122,30 @@ A neighborhood-level health environment scoring system measuring the environment
 - Respiratory tab queries `composite_scores` + `interpretations` tables (separate); Cardiovascular stores everything in `cardiovascular_scores` (single table) — minor schema divergence, works fine but worth noting
 - Respiratory grade scale in the UI showed non-standard thresholds (70–100, 55–69, etc.); updated Cardiovascular to use the correct scale from AGENTS.md (≥80, 65–79, 50–64, 35–49, <35)
 
+### 2026-04-13 — Tool 2 Cardiovascular (Noise Raster Fix)
+**Completed:**
+- Updated `notebooks/cardiovascular/cardiovascular_pipeline.py` to load 4 individual state BTS noise rasters (PA, CA, AZ, NC) instead of a single CONUS file
+  - BTS data downloaded as per-state files, not one CONUS GeoTIFF
+  - Added `rasterio.merge` to combine the 4 state rasters into a single temp file before running zonal stats
+  - Each file's CRS, shape, and nodata value are logged on load; CRS mismatches produce a warning
+  - Nodata value is read from raster metadata instead of hardcoded `-9999`
+  - Temp merged file is cleaned up after zonal stats complete
+  - All downstream logic (df_noise, raw_signals write, test suites) unchanged
+
+**Left off at:**
+- Pipeline script is written but not yet executed — needs Colab with raster files and Supabase credentials
+
+**Next session should start with:**
+1. Run `create_table.sql` in Supabase SQL Editor
+2. Upload to Google Drive: 4 BTS state noise GeoTIFFs, NLCD impervious GeoTIFF, ZCTA shapefile
+3. Update file paths in pipeline script (`NOISE_RASTER_PATHS` list, `IMPERVIOUS_RASTER_PATH`, `ZCTA_SHAPEFILE_PATH`)
+4. Execute pipeline cells sequentially in Colab — each gate must pass before proceeding
+5. After pipeline completes, verify Streamlit cardiovascular tab renders correctly
+6. Run Suite 5 manual Streamlit smoke tests
+
+**Any issues or surprises:**
+- BTS noise data comes as individual state rasters, not a single CONUS file — required merge step added to pipeline
+
 ---
 
 ## Environment & Credentials
