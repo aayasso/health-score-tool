@@ -403,6 +403,77 @@ CV_GRADE_INFO = {
     "F": ("#A01818", "Very Poor",  "This neighborhood presents significant cardiovascular health challenges across multiple dimensions. Heart disease risk factors are well above average."),
 }
 
+# ── STRESS / SENSORY CONSTANTS ──────────────────────────────
+STRESS_COMPONENT_CONFIG = {
+    "noise": {
+        "label":   "Transportation Noise",
+        "color":   "#3A0CA3",
+        "weight":  35,
+        "sublabel": "Highway & aviation noise exposure",
+        "explain": "Chronic noise from highways, railways, and flight paths disrupts sleep, increases stress hormones, and is linked to anxiety and cognitive difficulties. This measures the average day-night noise level. Higher scores mean quieter, more restful neighborhoods.",
+    },
+    "light_pollution": {
+        "label":   "Light Pollution",
+        "color":   "#4361EE",
+        "weight":  25,
+        "sublabel": "Nighttime artificial light intensity",
+        "explain": "Excessive artificial light at night disrupts circadian rhythms, impairs sleep quality, and is associated with increased stress and mood disorders. This measures satellite-observed nighttime radiance. Higher scores mean darker, more sleep-friendly skies.",
+    },
+    "depression": {
+        "label":   "Depression Prevalence",
+        "color":   "#4CC9F0",
+        "weight":  25,
+        "sublabel": "Local depression rates",
+        "explain": "Reflects the share of adults reporting depression in this ZIP code, based on CDC health surveys. This captures the cumulative mental health burden shaped by neighborhood-level stressors. Higher scores indicate lower depression prevalence.",
+    },
+    "mental_health": {
+        "label":   "Poor Mental Health Days",
+        "color":   "#7B2FBE",
+        "weight":  15,
+        "sublabel": "Self-reported poor mental health",
+        "explain": "Measures how frequently residents report poor mental health days, reflecting the lived experience of stress, anxiety, and emotional difficulty in the neighborhood. Higher scores indicate fewer poor mental health days.",
+    },
+}
+
+STRESS_GRADE_INFO = {
+    "A": ("#3A0CA3", "Excellent",  "This neighborhood offers a calm, low-stress sensory environment — quiet surroundings, dark skies, and strong community mental health indicators."),
+    "B": ("#4361EE", "Good",       "Stress and sensory conditions here are above average. Most environmental and mental health factors support rest and well-being."),
+    "C": ("#B87A1A", "Fair",       "Moderate sensory stressors are present — noise, light, or mental health indicators suggest some areas for attention, particularly for sensitive individuals."),
+    "D": ("#C05020", "Poor",       "Elevated stress factors in this neighborhood — noise exposure, light pollution, or mental health burden may affect sleep quality and daily well-being."),
+    "F": ("#A01818", "Very Poor",  "This neighborhood faces significant sensory and mental health challenges. Multiple stress factors are well above average."),
+}
+
+
+# ── STRESS DATA HELPERS ──────────────────────────────────────
+@st.cache_data(ttl=3600)
+def fetch_stress_score(zipcode: str):
+    r = supabase.table("stress_scores")\
+        .select("*")\
+        .eq("zipcode", zipcode)\
+        .limit(1).execute()
+    return r.data[0] if r.data else None
+
+@st.cache_data(ttl=3600)
+def fetch_stress_metro_peers(metro: str, limit: int = 15):
+    zips_resp = supabase.table("zip_codes")\
+        .select("zipcode")\
+        .eq("metro", metro)\
+        .execute()
+    if not zips_resp.data:
+        return []
+    metro_zips = [r["zipcode"] for r in zips_resp.data]
+    all_scores = []
+    batch_size = 50
+    for i in range(0, len(metro_zips), batch_size):
+        batch = metro_zips[i:i + batch_size]
+        resp = supabase.table("stress_scores")\
+            .select("zipcode,composite_score,letter_grade")\
+            .in_("zipcode", batch)\
+            .execute()
+        all_scores.extend(resp.data)
+    all_scores.sort(key=lambda x: x["composite_score"], reverse=True)
+    return all_scores[:limit]
+
 
 # ── SINGLE DISC SVG ───────────────────────────────────────────
 def make_disc_svg(component_scores: dict, composite: float, grade: str,
@@ -490,7 +561,7 @@ def clean_interp(text: str) -> str:
 st.markdown('<div class="app-title">🏥 Health Environment Score</div>', unsafe_allow_html=True)
 st.markdown('<div class="app-sub">Neighborhood-level health environment intelligence</div>', unsafe_allow_html=True)
 
-tab_resp, tab_cv = st.tabs(["🌿 Respiratory", "❤️ Cardiovascular"])
+tab_resp, tab_cv, tab_stress = st.tabs(["🌿 Respiratory", "❤️ Cardiovascular", "🧠 Stress / Sensory"])
 
 # ═══════════════════════════════════════════════════════════════
 # TAB 1 — RESPIRATORY
@@ -858,9 +929,196 @@ with tab_cv:
                             """, unsafe_allow_html=True)
 
 
+# ═══════════════════════════════════════════════════════════════
+# TAB 3 — STRESS / SENSORY
+# ═══════════════════════════════════════════════════════════════
+with tab_stress:
+    zip_input_st = st.text_input(
+        "", placeholder="Enter a ZIP code  (e.g. 15213, 90210, 28277, 85001)",
+        label_visibility="collapsed",
+        key="zip_stress",
+    )
+
+    if not zip_input_st:
+        st.markdown("""
+        <div class="info-box" style="background:#EDE8F5;color:#3A0CA3;">
+        Enter any ZIP code in <strong>Pittsburgh, Los Angeles, Phoenix, or Charlotte</strong>
+        to see its Stress &amp; Sensory Environment Score — powered by CDC, BTS, and NASA data.
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        zipcode_st = zip_input_st.strip().zfill(5)
+
+        with st.spinner("Loading…"):
+            st_data   = fetch_stress_score(zipcode_st)
+            zip_meta  = fetch_zip_meta(zipcode_st)
+
+        if not st_data:
+            st.markdown(f"""
+            <div class="error-box">
+            No stress/sensory data found for ZIP code <strong>{zipcode_st}</strong>.
+            This MVP covers Pittsburgh, Los Angeles, Phoenix, and Charlotte.
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st_composite = st_data["composite_score"]
+            st_grade     = st_data["letter_grade"]
+            st_metro     = (zip_meta.get("metro") if zip_meta else "") or ""
+            st_metro_t   = st_metro.title() if st_metro else ""
+
+            # Build component scores dict for the disc visualization
+            st_comp_scores = {
+                "noise":            st_data.get("noise_normalized") or 0,
+                "light_pollution":  st_data.get("light_pollution_normalized") or 0,
+                "depression":       st_data.get("depression_normalized") or 0,
+                "mental_health":    st_data.get("mental_health_normalized") or 0,
+            }
+
+            st_grade_color, st_grade_label, st_grade_desc = STRESS_GRADE_INFO.get(
+                st_grade, ("#444", "Unknown", "")
+            )
+
+            # Score card
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            col_disc_st, col_info_st = st.columns([1, 1.25], gap="medium")
+
+            with col_disc_st:
+                st.markdown(
+                    make_disc_svg(st_comp_scores, st_composite, st_grade,
+                                  comp_config=STRESS_COMPONENT_CONFIG, grade_info=STRESS_GRADE_INFO),
+                    unsafe_allow_html=True
+                )
+
+            with col_info_st:
+                st_metro_tag = f" &middot; {st_metro_t}" if st_metro_t else ""
+                st.markdown(f"""
+                <div style="padding-top:12px;">
+                  <div style="font-size:0.78rem;color:#AAAAAA;text-transform:uppercase;
+                              letter-spacing:0.07em;margin-bottom:6px;">
+                    ZIP {zipcode_st}{st_metro_tag}
+                  </div>
+                  <div style="font-family:'DM Serif Display',serif;font-size:1.9rem;
+                              color:{st_grade_color};line-height:1.1;margin-bottom:8px;">
+                    {st_grade_label}
+                  </div>
+                  <div style="font-size:0.88rem;color:#555;line-height:1.65;margin-bottom:12px;">
+                    {st_grade_desc}
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # Component breakdown
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown('<div class="section-header">Score Breakdown</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-sub">Four weighted factors combine to form the overall score</div>', unsafe_allow_html=True)
+
+            for key, cfg in STRESS_COMPONENT_CONFIG.items():
+                raw = st_comp_scores.get(key)
+                wt  = cfg["weight"]
+                if raw is not None and raw > 0:
+                    score_str = f"{raw * wt / 100:.0f}/{wt}"
+                else:
+                    score_str = "—"
+
+                st.markdown(f"""
+                <div class="comp-row">
+                  <div class="comp-dot" style="background:{cfg['color']};"></div>
+                  <div class="comp-info">
+                    <div class="comp-label">{cfg['label']}</div>
+                    <div class="comp-sub">{cfg['sublabel']}</div>
+                  </div>
+                  <div class="comp-score">{score_str}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # Interpretation
+            st_interp = st_data.get("interpretation", "")
+            if st_interp:
+                clean_st = clean_interp(st_interp)
+                if clean_st:
+                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    st.markdown('<div class="section-header">About This ZIP Code</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="interp-text">{clean_st}</div>', unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+            # How it's calculated
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown('<div class="section-header">How the Score Is Calculated</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-sub">Tap any factor to learn more</div>', unsafe_allow_html=True)
+
+            for key, cfg in STRESS_COMPONENT_CONFIG.items():
+                st.markdown(f"""
+                <details>
+                  <summary>
+                    <span style="display:inline-block;width:9px;height:9px;border-radius:50%;
+                          background:{cfg['color']};flex-shrink:0;"></span>
+                    <strong>{cfg['label']}</strong>
+                    <span style="color:#AAAAAA;font-weight:400;font-size:0.82rem;margin-left:4px;">
+                      · {cfg['weight']}% of total
+                    </span>
+                  </summary>
+                  <div>{cfg['explain']}</div>
+                </details>
+                """, unsafe_allow_html=True)
+
+            st.markdown("""
+            <details>
+              <summary>
+                <strong>Grade Scale</strong>
+              </summary>
+              <div style="line-height:2.1;">
+                <span style="color:#3A0CA3;font-weight:700;">A (≥ 80)</span> — Excellent stress &amp; sensory environment<br>
+                <span style="color:#4361EE;font-weight:700;">B (65–79)</span>  — Above average sensory conditions<br>
+                <span style="color:#B87A1A;font-weight:700;">C (50–64)</span>  — Moderate conditions; some stressors present<br>
+                <span style="color:#C05020;font-weight:700;">D (35–49)</span>  — Elevated stress and sensory burden<br>
+                <span style="color:#A01818;font-weight:700;">F (< 35)</span>   — Significant stress and sensory challenges
+              </div>
+            </details>
+            """, unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # Metro comparison
+            if st_metro:
+                with st.expander(f"📊  Compare to other ZIP codes in {st_metro_t}"):
+                    with st.spinner("Loading metro data…"):
+                        st_peers = fetch_stress_metro_peers(st_metro, limit=15)
+
+                    if not st_peers:
+                        st.markdown(
+                            '<div style="color:#AAA;font-size:0.88rem;padding:8px 0;">No peer data available.</div>',
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st_max_score = max(p["composite_score"] for p in st_peers)
+                        for p in st_peers:
+                            z       = p["zipcode"]
+                            s       = p["composite_score"]
+                            g       = p["letter_grade"]
+                            bar_pct = int((s / st_max_score) * 100) if st_max_score else 0
+                            g_color = STRESS_GRADE_INFO.get(g, ("#888",))[0]
+                            bold    = "font-weight:700;" if z == zipcode_st else ""
+                            hi      = "background:#EDE8F5;border-radius:8px;padding:2px 6px;" if z == zipcode_st else ""
+
+                            st.markdown(f"""
+                            <div class="metro-row" style="{hi}">
+                              <div class="metro-zip" style="{bold}">{z}</div>
+                              <div class="metro-bar-wrap">
+                                <div class="metro-bar" style="width:{bar_pct}%;background:{g_color};"></div>
+                              </div>
+                              <div class="metro-score">{s:.0f}</div>
+                              <div class="metro-grade" style="color:{g_color};">{g}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+
 # ── FOOTER ────────────────────────────────────────────────────
 st.markdown("""
 <div style="text-align:center;margin-top:2.5rem;font-size:0.75rem;color:#CCCCCC;">
-  LaSalle Technologies &nbsp;·&nbsp; Data: EPA, CDC PLACES, BTS, NLCD &nbsp;·&nbsp; 2023–2024
+  LaSalle Technologies &nbsp;·&nbsp; Data: EPA, CDC PLACES, BTS, NLCD, NASA VIIRS &nbsp;·&nbsp; 2023–2024
 </div>
 """, unsafe_allow_html=True)

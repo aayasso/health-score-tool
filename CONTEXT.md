@@ -7,7 +7,7 @@
 ## Current Status (as of April 2026)
 
 ### Active Phase
-**Tool 2 — ❤️ Cardiovascular Health Score**
+**Tool 3 — 🧠 Stress / Sensory Environment Score**
 
 ### What's Complete
 - Tool 1 (Respiratory) is fully live on Streamlit Community Cloud
@@ -167,6 +167,41 @@ A neighborhood-level health environment scoring system measuring the environment
 
 **Any issues or surprises:**
 - CDC PLACES API changed from long format (one row per measure per ZIP) to wide format (one row per ZIP with measure columns). This is a breaking change that will affect Tools 3–5. See Lessons Learned below.
+
+### 2026-04-13 — Tool 3 Stress / Sensory (Pipeline & UI Build)
+**Completed:**
+- Full stress/sensory pipeline script: `notebooks/stress/stress_pipeline.py` (~850 lines)
+  - BTS noise reuse from `raw_signals` table (no raster reprocessing)
+  - NASA VIIRS light pollution raster processing (per-state, writes to `raw_signals`)
+  - CDC PLACES ingestion (depression + poor mental health days) with wide-format batch fetch
+  - Min-max normalization (all 4 components inverted)
+  - Composite scoring + letter grade assignment
+  - Claude API interpretation generation (stress/sensory framing)
+  - Supabase upsert to `stress_scores`
+  - All 4 test suite gates embedded (Ingestion, Normalization, Scoring, Supabase Write)
+- Supabase CREATE TABLE SQL: `notebooks/stress/create_table.sql`
+- Streamlit UI: modified `app.py` to add 3rd tab (Stress / Sensory)
+  - Blue/Purple color palette (#3A0CA3, #4361EE, #4CC9F0, #7B2FBE)
+  - Matches cardiovascular tab pattern exactly (disc viz, component breakdown, interpretation, metro comparison)
+  - Queries `stress_scores` table
+  - Footer updated to include NASA VIIRS in data source list
+- Applied all Lessons Learned from Tool 2 (CDC wide format, per-state raster, ZCTA5CE20, DRIVE_PREFIX)
+
+**Left off at:**
+- Pipeline script is written but not yet executed — needs Colab with VIIRS raster and Supabase credentials
+
+**Next session should start with:**
+1. Run `create_table.sql` in Supabase SQL Editor
+2. Download NASA VIIRS annual VNL v2 composite GeoTIFF and upload to Google Drive as `viirs_vnl_v2_annual.tif`
+3. Execute pipeline cells sequentially in Colab — each gate must pass before proceeding
+4. After pipeline completes, verify Streamlit stress/sensory tab renders correctly
+5. Run Suite 5 manual Streamlit smoke tests
+6. Begin Tool 4 (Food Access) planning
+
+**Any issues or surprises:**
+- Noise data reuse from raw_signals is straightforward — just a Supabase read, no raster work
+- VIIRS global composite is large (~1.5GB) — per-state processing implemented to avoid RAM crashes
+- Stress tool 4th component confirmed as Poor Mental Health Days (MHLTH_CrudePrev), not crowding or social isolation
 
 ---
 
