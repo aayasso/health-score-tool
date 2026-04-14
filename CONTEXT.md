@@ -7,11 +7,12 @@
 ## Current Status (as of April 2026)
 
 ### Active Phase
-**Tool 4 — 🥦 Food Access Score** (pipeline + UI built, awaiting Colab execution)
+**Tool 5 — 🌡️ Heat & Climate Resilience Score**
 
 ### What's Complete
 - Tool 1 (Respiratory) is fully live on Streamlit Community Cloud
 - Tool 3 (Stress / Sensory) pipeline executed successfully — 574 ZIPs scored, all 4 test suites passed (14/14, 26/26, 11/11, 13/13), data in `stress_scores` table, Streamlit tab built
+- Tool 4 (Food Access) pipeline executed successfully — 574 ZIPs scored, all 4 test suites passed (12/12, 20/20, 12/12, 15/15), data in `food_access_scores` table, Streamlit tab built
 - Supabase schema established: `zip_codes`, `raw_signals`, `score_components`, `composite_scores`, `interpretations`, `score_config`
 - Respiratory reference implementation is the pattern for all subsequent tools
 - 600 ZIP codes confirmed across Pittsburgh, LA, Phoenix, Charlotte
@@ -300,6 +301,32 @@ A neighborhood-level health environment scoring system measuring the environment
 - FARA uses tract-level data requiring population-weighted crosswalk to ZIP — may have gaps for some ZIPs (median imputation handles this)
 - Atlas is county-level — all ZIPs in the same county get the same grocery_density_raw value (acceptable; FARA and CDC provide ZIP-level variation)
 - File paths for USDA/HUD data may need adjustment based on actual download filenames
+
+### 2026-04-14 — Tool 4 Food Access (Colab Fixes & Execution)
+**Completed:**
+- Fixed Atlas STORES sheet header: `header=1` to skip title row (real column names in row 1)
+- Added early validation that FIPS and GROCPTH16 columns are present after loading
+- Fixed `low_access_raw` range test: widened bounds to `-0.01`/`100.01` for floating point precision at boundaries
+- Added PostgREST schema cache warm-up: fresh Supabase client + retry loop (5 attempts, 3s apart) before upsert
+- Atlas file extension corrected to `.xlsx`
+
+### 2026-04-14 — Tool 4 Food Access ✅ COMPLETE
+**Completed:**
+- Food Access pipeline executed successfully in Colab — 574 ZIPs scored
+- All 4 test suites passed: Ingestion (12/12), Normalization (20/20), Scoring (12/12), Supabase Write (15/15)
+- Data written to `food_access_scores` table in Supabase
+- Streamlit Food Access tab live with 3-component disc visualization
+
+**Next session should start with:**
+1. Verify Streamlit food access tab renders correctly with live data
+2. Begin Tool 5 (Heat & Climate Resilience) planning
+3. Confirm Tool 5 4th component with project owner (currently TBD in TOOL_SPECS.md)
+
+**Any issues or surprises:**
+- 574 of 600 ZIPs scored (same coverage as Stress tool — 26 ZIPs missing component values)
+- PostgREST schema cache required fresh client + warm-up retry loop to resolve PGRST205 errors
+- Atlas STORES sheet has a title row before the real headers — needed `header=1`
+- `low_access_raw` range test hit floating point boundary at exactly 100.0 — widened tolerance
 
 ---
 
