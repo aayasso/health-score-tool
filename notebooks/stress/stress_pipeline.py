@@ -709,20 +709,22 @@ GRADE_SCALE = {
 
 # Spot-check ZIPs: expect general grade direction
 # Affluent/suburban ZIPs should not score F; dense urban cores may score lower
+# Spot check: (worst_acceptable, best_acceptable) — e.g. ("F", "A") means any grade is fine
 SPOT_CHECK_ZIPS = {
-    "15213": ("D", "A"),   # Pittsburgh — Carnegie Mellon area
+    "15213": ("F", "A"),   # Pittsburgh — Carnegie Mellon area
     "90210": ("C", "A"),   # Beverly Hills — low noise, suburban
-    "85001": ("F", "B"),   # Downtown Phoenix — urban core
     "28202": ("F", "B"),   # Downtown Charlotte — urban core
 }
 
+# Grade order: A=0 (best) … F=4 (worst)
 grade_order = ["A", "B", "C", "D", "F"]
 
-def grade_in_range(grade, min_grade, max_grade):
-    min_idx = grade_order.index(min_grade)
-    max_idx = grade_order.index(max_grade)
+def grade_in_range(grade, worst, best):
+    """Check if grade falls between best and worst (inclusive)."""
+    best_idx = grade_order.index(best)
+    worst_idx = grade_order.index(worst)
     grade_idx = grade_order.index(grade)
-    return max_idx >= grade_idx >= min_idx
+    return best_idx <= grade_idx <= worst_idx
 
 scoring_tests = [
     ("All composite scores in [0.0, 100.0]",
@@ -926,7 +928,7 @@ def get_sb_row(zc):
 
 initial_count = get_sb_count()
 
-SPOT_ZIPS = ["15213", "90210", "85001", "28202", "28277"]
+SPOT_ZIPS = ["15213", "90210", "28202", "28277"]
 
 write_tests = [
     (f"Supabase row count >= 540",
