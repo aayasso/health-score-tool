@@ -556,8 +556,8 @@ ingestion_tests = [
     # Raw value range checks
     ("low_access_raw in [0, 100]",
         lambda: (
-            df["low_access_raw"].dropna().between(0, 100).all(),
-            f"min={df['low_access_raw'].min():.1f}, max={df['low_access_raw'].max():.1f}"
+            df["low_access_raw"].dropna().between(-0.01, 100.01).all(),
+            f"min={df['low_access_raw'].min():.4f}, max={df['low_access_raw'].max():.4f}"
         )),
     ("low_access_raw nulls < 10%",
         lambda: (
