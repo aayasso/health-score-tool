@@ -285,7 +285,7 @@ DRIVE_PREFIX = "/content/drive/MyDrive/Colab Notebooks/health-score-data"
 # If using the global composite, per-state processing avoids loading the entire file.
 VIIRS_RASTER_PATH = f"{DRIVE_PREFIX}/viirs_vnl_v2_annual.tif"
 
-ZCTA_SHAPEFILE_PATH = f"{DRIVE_PREFIX}/tl_2020_us_zcta520.shp"
+ZCTA_SHAPEFILE_PATH = f"{DRIVE_PREFIX}/tl_2023_us_zcta520/tl_2023_us_zcta520.shp"
 
 # Map each state to the metros whose ZIPs fall within that state's raster coverage
 STATE_METRO_MAP = {
