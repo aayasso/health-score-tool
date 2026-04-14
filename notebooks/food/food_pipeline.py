@@ -316,8 +316,9 @@ log("INFO", f"Loading Atlas from {ATLAS_PATH}")
 # The Atlas Excel has multiple sheets — the grocery data is typically in "ACCESS"
 # or "STORES". Try "STORES" first (contains GROCPTH16).
 try:
-    df_atlas_raw = pd.read_excel(ATLAS_PATH, sheet_name="STORES")
-    log("INFO", "Loaded 'STORES' sheet from Atlas")
+    # header=1: row 0 is a title row, real column names are in row 1
+    df_atlas_raw = pd.read_excel(ATLAS_PATH, sheet_name="STORES", header=1)
+    log("INFO", "Loaded 'STORES' sheet from Atlas (header=1)")
 except ValueError:
     # Fall back to trying other common sheet names
     xls = pd.ExcelFile(ATLAS_PATH)
@@ -327,8 +328,18 @@ except ValueError:
         f"Bring this error to Claude Code."
     )
 
-log("INFO", f"Atlas columns: {list(df_atlas_raw.columns)}")
+log("INFO", f"Atlas columns ({len(df_atlas_raw.columns)}): {list(df_atlas_raw.columns)}")
 log("INFO", f"Atlas rows: {len(df_atlas_raw)}")
+
+# Verify required columns are present
+for required_col in ["FIPS", "GROCPTH16"]:
+    if required_col not in df_atlas_raw.columns:
+        log("ERROR", f"Required column '{required_col}' not found in Atlas. "
+            f"Available columns: {list(df_atlas_raw.columns)}")
+        raise RuntimeError(
+            f"Column '{required_col}' missing from STORES sheet. "
+            f"Bring this error to Claude Code."
+        )
 
 # FIPS is the county FIPS code, GROCPTH16 is grocery stores per 1,000 pop
 df_atlas_raw["FIPS"] = df_atlas_raw["FIPS"].astype(str).str.zfill(5)
