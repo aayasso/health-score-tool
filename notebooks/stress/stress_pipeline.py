@@ -554,9 +554,9 @@ ingestion_tests = [
             df["depression_raw"].isna().sum() / len(df) < 0.10,
             f"{df['depression_raw'].isna().sum()} nulls ({df['depression_raw'].isna().sum()/len(df)*100:.1f}%)"
         )),
-    ("mental_health_raw in [5, 30]",
+    ("mental_health_raw in [5, 40]",
         lambda: (
-            df["mental_health_raw"].dropna().between(5, 30).all(),
+            df["mental_health_raw"].dropna().between(5, 40).all(),
             f"min={df['mental_health_raw'].min():.1f}, max={df['mental_health_raw'].max():.1f}"
         )),
     ("mental_health_raw nulls < 10%",

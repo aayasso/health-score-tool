@@ -225,6 +225,26 @@ A neighborhood-level health environment scoring system measuring the environment
 - PostgREST schema cache must be refreshed after creating new tables — `NOTIFY pgrst, 'reload schema'` via an RPC function is the standard Supabase pattern
 - The `raw_signals` table is still used by VIIRS light pollution (write) and will be used by Heat tool (read impervious surface) — only the noise read was removed from the stress pipeline
 
+### 2026-04-13 — Tool 3 Stress (Colab Execution Fixes)
+**Completed:**
+- Fixed ZCTA shapefile path: `tl_2023_us_zcta520/tl_2023_us_zcta520.shp` (was `tl_2020_us_zcta520.shp`)
+- Fixed VIIRS raster path to actual download filename: `VNL_npp_2025_global_vcmslcfg_v2_c202604011200.average_masked.dat.tif`
+- Simplified VIIRS processing from per-state loop to single-pass `zonal_stats` against all 600 ZIPs (VIIRS is a single global file, not per-state like BTS noise)
+- Widened `mental_health_raw` plausible range from [5, 30] to [5, 40] — actual CDC PLACES data has max=33.4%
+- Updated TOOL_SPECS.md with observed mental health days range
+
+**Left off at:**
+- Ingestion test gate should now pass — resume Colab execution from test suite 1
+
+**Next session should start with:**
+1. Re-run stress pipeline from ingestion test gate in Colab
+2. After pipeline completes, verify Streamlit stress/sensory tab renders correctly
+3. Begin Tool 4 (Food Access) planning
+
+**Any issues or surprises:**
+- VIIRS global raster does NOT need per-state splitting — unlike BTS noise which is distributed as per-state files, VIIRS is a single global composite and `zonal_stats` handles it fine in one pass
+- CDC PLACES `MHLTH_CrudePrev` goes up to ~33.4% across our 600 ZIPs — initial estimate of max=30 was too conservative
+
 ---
 
 ## Lessons Learned — Inherited by Tools 3–5
