@@ -7,10 +7,11 @@
 ## Current Status (as of April 2026)
 
 ### Active Phase
-**Tool 3 — 🧠 Stress / Sensory Environment Score**
+**Tool 4 — 🥦 Food Access Score**
 
 ### What's Complete
 - Tool 1 (Respiratory) is fully live on Streamlit Community Cloud
+- Tool 3 (Stress / Sensory) pipeline executed successfully — 574 ZIPs scored, all 4 test suites passed (14/14, 26/26, 11/11, 13/13), data in `stress_scores` table, Streamlit tab built
 - Supabase schema established: `zip_codes`, `raw_signals`, `score_components`, `composite_scores`, `interpretations`, `score_config`
 - Respiratory reference implementation is the pattern for all subsequent tools
 - 600 ZIP codes confirmed across Pittsburgh, LA, Phoenix, Charlotte
@@ -18,10 +19,9 @@
 ### What's In Progress
 - Cardiovascular pipeline script corrected with Colab-tested fixes — ready for re-execution
 - Cardiovascular Streamlit tab built — needs data in Supabase before it will display
+- Stress/Sensory Streamlit tab built — needs verification after pipeline data lands
 
 ### What's Blocked / At Risk
-- BTS noise raster processing is the highest-risk step — rasterio setup in Colab must be validated before proceeding
-- Stress/Sensory 4th component not yet confirmed (crowding metric vs. social isolation)
 - Heat tool 4th component not yet confirmed
 
 ---
@@ -244,6 +244,22 @@ A neighborhood-level health environment scoring system measuring the environment
 **Any issues or surprises:**
 - VIIRS global raster does NOT need per-state splitting — unlike BTS noise which is distributed as per-state files, VIIRS is a single global composite and `zonal_stats` handles it fine in one pass
 - CDC PLACES `MHLTH_CrudePrev` goes up to ~33.4% across our 600 ZIPs — initial estimate of max=30 was too conservative
+
+### 2026-04-13 — Tool 3 Stress ✅ COMPLETE
+**Completed:**
+- Stress pipeline executed successfully in Colab — 574 ZIPs scored
+- All 4 test suites passed: Ingestion (14/14), Normalization (26/26), Scoring (11/11), Supabase Write (13/13)
+- Data written to `stress_scores` table in Supabase
+- Fixes applied during Colab run: ZCTA shapefile path, VIIRS raster path + single-pass processing, mental_health_raw range widened, VIIRS null median imputation, scoring spot check logic corrected, removed non-existent ZIP 85001
+
+**Next session should start with:**
+1. Verify Streamlit stress/sensory tab renders correctly with live data
+2. Begin Tool 4 (Food Access) planning
+
+**Any issues or surprises:**
+- 574 of 600 ZIPs scored (26 ZIPs likely missing one or more component values)
+- `grade_in_range()` had an inverted index comparison — best/worst were swapped in the original implementation
+- VIIRS had 2 ZIPs with null coverage, resolved via median imputation
 
 ---
 

@@ -86,7 +86,7 @@ When uncertain whether something is proprietary, treat it as proprietary and ask
 | Pilot metros | Pittsburgh PA · Los Angeles CA · Phoenix AZ · Charlotte NC |
 | ZIP coverage | 600 ZIPs total across all 4 metros |
 | Active tool | Check `CONTEXT.md` — do not assume |
-| Tools | 1-Respiratory ✅ · 2-Cardiovascular 🔄 · 3-Stress 🔜 · 4-Food Access 🔜 · 5-Heat 🔜 |
+| Tools | 1-Respiratory ✅ · 2-Cardiovascular 🔄 · 3-Stress ✅ · 4-Food Access 🔜 · 5-Heat 🔜 |
 | Stack | Colab → Supabase PostgreSQL → Streamlit Community Cloud → Claude API |
 | Scoring pipeline | Ingest → Validate → Normalize → Weight → Composite → Grade → Interpret → Upsert |
 | Grade scale | A ≥ 80 · B 65–79 · C 50–64 · D 35–49 · F < 35 |
