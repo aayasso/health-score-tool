@@ -7,7 +7,7 @@
 ## Current Status (as of April 2026)
 
 ### Active Phase
-**Tool 4 — 🥦 Food Access Score**
+**Tool 4 — 🥦 Food Access Score** (pipeline + UI built, awaiting Colab execution)
 
 ### What's Complete
 - Tool 1 (Respiratory) is fully live on Streamlit Community Cloud
@@ -260,6 +260,46 @@ A neighborhood-level health environment scoring system measuring the environment
 - 574 of 600 ZIPs scored (26 ZIPs likely missing one or more component values)
 - `grade_in_range()` had an inverted index comparison — best/worst were swapped in the original implementation
 - VIIRS had 2 ZIPs with null coverage, resolved via median imputation
+
+### 2026-04-14 — Tool 4 Food Access (Pipeline & UI Build)
+**Completed:**
+- Full food access pipeline script: `notebooks/food/food_pipeline.py` (~700 lines)
+  - USDA FARA ingestion: tract-level → ZIP via HUD Tract-ZIP crosswalk with population-weighted aggregation
+  - USDA Food Environment Atlas ingestion: county-level → ZIP via HUD ZIP-County crosswalk (primary county)
+  - CDC PLACES ingestion (diabetes + obesity) with wide-format batch fetch → combined health_outcome_raw
+  - Min-max normalization: low_access INVERTED, grocery_density DIRECT, health_outcome INVERTED
+  - Median imputation for any null normalized values (FARA crosswalk gaps)
+  - Composite scoring + letter grade assignment (3 components, weights 35/35/30)
+  - Claude API interpretation generation (food-access-specific framing)
+  - Supabase upsert to `food_access_scores`
+  - All 4 test suite gates embedded (Ingestion, Normalization, Scoring, Supabase Write)
+- Supabase CREATE TABLE SQL: `notebooks/food/create_table.sql`
+- Streamlit UI: modified `app.py` to add 4th tab (Food Access)
+  - Green/Yellow color palette (#386641, #6A994E, #A7C957)
+  - 3 components instead of 4 (subtitle updated to "Three weighted factors")
+  - Matches stress/cardiovascular tab pattern exactly (disc viz, component breakdown, interpretation, metro comparison)
+  - Footer updated to include USDA in data source list
+- Updated TOOL_SPECS.md with confirmed weights (35/35/30) and data file details
+
+**Left off at:**
+- Pipeline script is written but not yet executed — needs Colab with USDA/HUD data files and Supabase credentials
+
+**Next session should start with:**
+1. Download data files and upload to Google Drive:
+   - USDA FARA: `FoodAccessResearchAtlasData2019.xlsx`
+   - USDA Atlas: `FoodEnvironmentAtlas.xls`
+   - HUD Tract-ZIP crosswalk: `TRACT_ZIP_032025.xlsx`
+   - HUD ZIP-County crosswalk: `ZIP_COUNTY_032025.xlsx`
+2. Run `create_table.sql` in Supabase SQL Editor
+3. Execute pipeline cells sequentially in Colab — each gate must pass before proceeding
+4. After pipeline completes, verify Streamlit food access tab renders correctly
+5. Run Suite 5 manual Streamlit smoke tests
+
+**Any issues or surprises:**
+- No raster processing needed — purely tabular pipeline (USDA + CDC + HUD crosswalks)
+- FARA uses tract-level data requiring population-weighted crosswalk to ZIP — may have gaps for some ZIPs (median imputation handles this)
+- Atlas is county-level — all ZIPs in the same county get the same grocery_density_raw value (acceptable; FARA and CDC provide ZIP-level variation)
+- File paths for USDA/HUD data may need adjustment based on actual download filenames
 
 ---
 

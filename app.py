@@ -443,6 +443,39 @@ STRESS_GRADE_INFO = {
     "F": ("#A01818", "Very Poor",  "This neighborhood faces significant sensory and mental health challenges. Multiple stress factors are well above average."),
 }
 
+# ── FOOD ACCESS CONSTANTS ────────────────────────────────────
+FA_COMPONENT_CONFIG = {
+    "low_access": {
+        "label":   "Supermarket Access",
+        "color":   "#386641",
+        "weight":  35,
+        "sublabel": "Proximity to fresh food sources",
+        "explain": "Measures the share of the population living more than half a mile from the nearest supermarket. Neighborhoods where most residents can easily walk to a full-service grocery store score higher. Higher scores mean better supermarket proximity.",
+    },
+    "grocery_density": {
+        "label":   "Grocery Store Availability",
+        "color":   "#6A994E",
+        "weight":  35,
+        "sublabel": "Grocery stores per capita",
+        "explain": "Reflects the number of grocery stores available relative to the local population. More stores per capita means more options, shorter travel times, and greater competition — all of which support access to affordable, fresh food. Higher scores mean more grocery availability.",
+    },
+    "health_outcome": {
+        "label":   "Diet-Related Health",
+        "color":   "#A7C957",
+        "weight":  30,
+        "sublabel": "Diabetes & obesity prevalence",
+        "explain": "Captures the combined prevalence of diabetes and obesity among residents, drawn from CDC health surveys. These conditions are strongly linked to food environment quality over time. Higher scores indicate lower rates of diet-related disease.",
+    },
+}
+
+FA_GRADE_INFO = {
+    "A": ("#386641", "Excellent",  "This neighborhood has strong food access — close proximity to supermarkets, good grocery availability, and low rates of diet-related health conditions."),
+    "B": ("#6A994E", "Good",       "Food access here is above average. Most residents have reasonable access to fresh food and the community shows favorable diet-related health indicators."),
+    "C": ("#B87A1A", "Fair",       "Moderate food access conditions — some gaps in supermarket proximity or grocery availability may affect certain residents, particularly those without vehicles."),
+    "D": ("#C05020", "Poor",       "Limited food access in this neighborhood. Fewer grocery options, greater distance to supermarkets, or elevated diet-related health concerns are present."),
+    "F": ("#A01818", "Very Poor",  "This neighborhood faces significant food access challenges. Fresh food options are limited and diet-related health conditions are well above average."),
+}
+
 
 # ── STRESS DATA HELPERS ──────────────────────────────────────
 @st.cache_data(ttl=3600)
@@ -467,6 +500,37 @@ def fetch_stress_metro_peers(metro: str, limit: int = 15):
     for i in range(0, len(metro_zips), batch_size):
         batch = metro_zips[i:i + batch_size]
         resp = supabase.table("stress_scores")\
+            .select("zipcode,composite_score,letter_grade")\
+            .in_("zipcode", batch)\
+            .execute()
+        all_scores.extend(resp.data)
+    all_scores.sort(key=lambda x: x["composite_score"], reverse=True)
+    return all_scores[:limit]
+
+
+# ── FOOD ACCESS DATA HELPERS ─────────────────────────────────
+@st.cache_data(ttl=3600)
+def fetch_fa_score(zipcode: str):
+    r = supabase.table("food_access_scores")\
+        .select("*")\
+        .eq("zipcode", zipcode)\
+        .limit(1).execute()
+    return r.data[0] if r.data else None
+
+@st.cache_data(ttl=3600)
+def fetch_fa_metro_peers(metro: str, limit: int = 15):
+    zips_resp = supabase.table("zip_codes")\
+        .select("zipcode")\
+        .eq("metro", metro)\
+        .execute()
+    if not zips_resp.data:
+        return []
+    metro_zips = [r["zipcode"] for r in zips_resp.data]
+    all_scores = []
+    batch_size = 50
+    for i in range(0, len(metro_zips), batch_size):
+        batch = metro_zips[i:i + batch_size]
+        resp = supabase.table("food_access_scores")\
             .select("zipcode,composite_score,letter_grade")\
             .in_("zipcode", batch)\
             .execute()
@@ -561,7 +625,7 @@ def clean_interp(text: str) -> str:
 st.markdown('<div class="app-title">🏥 Health Environment Score</div>', unsafe_allow_html=True)
 st.markdown('<div class="app-sub">Neighborhood-level health environment intelligence</div>', unsafe_allow_html=True)
 
-tab_resp, tab_cv, tab_stress = st.tabs(["🌿 Respiratory", "❤️ Cardiovascular", "🧠 Stress / Sensory"])
+tab_resp, tab_cv, tab_stress, tab_fa = st.tabs(["🌿 Respiratory", "❤️ Cardiovascular", "🧠 Stress / Sensory", "🥦 Food Access"])
 
 # ═══════════════════════════════════════════════════════════════
 # TAB 1 — RESPIRATORY
@@ -1116,9 +1180,195 @@ with tab_stress:
                             """, unsafe_allow_html=True)
 
 
+# ═══════════════════════════════════════════════════════════════
+# TAB 4 — FOOD ACCESS
+# ═══════════════════════════════════════════════════════════════
+with tab_fa:
+    zip_input_fa = st.text_input(
+        "", placeholder="Enter a ZIP code  (e.g. 15213, 90210, 28277, 85001)",
+        label_visibility="collapsed",
+        key="zip_fa",
+    )
+
+    if not zip_input_fa:
+        st.markdown("""
+        <div class="info-box" style="background:#EEF5E6;color:#386641;">
+        Enter any ZIP code in <strong>Pittsburgh, Los Angeles, Phoenix, or Charlotte</strong>
+        to see its Food Access Score — powered by USDA and CDC data.
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        zipcode_fa = zip_input_fa.strip().zfill(5)
+
+        with st.spinner("Loading…"):
+            fa_data   = fetch_fa_score(zipcode_fa)
+            zip_meta  = fetch_zip_meta(zipcode_fa)
+
+        if not fa_data:
+            st.markdown(f"""
+            <div class="error-box">
+            No food access data found for ZIP code <strong>{zipcode_fa}</strong>.
+            This MVP covers Pittsburgh, Los Angeles, Phoenix, and Charlotte.
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            fa_composite = fa_data["composite_score"]
+            fa_grade     = fa_data["letter_grade"]
+            fa_metro     = (zip_meta.get("metro") if zip_meta else "") or ""
+            fa_metro_t   = fa_metro.title() if fa_metro else ""
+
+            # Build component scores dict for the disc visualization
+            fa_comp_scores = {
+                "low_access":       fa_data.get("low_access_normalized") or 0,
+                "grocery_density":  fa_data.get("grocery_density_normalized") or 0,
+                "health_outcome":   fa_data.get("health_outcome_normalized") or 0,
+            }
+
+            fa_grade_color, fa_grade_label, fa_grade_desc = FA_GRADE_INFO.get(
+                fa_grade, ("#444", "Unknown", "")
+            )
+
+            # Score card
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            col_disc_fa, col_info_fa = st.columns([1, 1.25], gap="medium")
+
+            with col_disc_fa:
+                st.markdown(
+                    make_disc_svg(fa_comp_scores, fa_composite, fa_grade,
+                                  comp_config=FA_COMPONENT_CONFIG, grade_info=FA_GRADE_INFO),
+                    unsafe_allow_html=True
+                )
+
+            with col_info_fa:
+                fa_metro_tag = f" &middot; {fa_metro_t}" if fa_metro_t else ""
+                st.markdown(f"""
+                <div style="padding-top:12px;">
+                  <div style="font-size:0.78rem;color:#AAAAAA;text-transform:uppercase;
+                              letter-spacing:0.07em;margin-bottom:6px;">
+                    ZIP {zipcode_fa}{fa_metro_tag}
+                  </div>
+                  <div style="font-family:'DM Serif Display',serif;font-size:1.9rem;
+                              color:{fa_grade_color};line-height:1.1;margin-bottom:8px;">
+                    {fa_grade_label}
+                  </div>
+                  <div style="font-size:0.88rem;color:#555;line-height:1.65;margin-bottom:12px;">
+                    {fa_grade_desc}
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # Component breakdown
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown('<div class="section-header">Score Breakdown</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-sub">Three weighted factors combine to form the overall score</div>', unsafe_allow_html=True)
+
+            for key, cfg in FA_COMPONENT_CONFIG.items():
+                raw = fa_comp_scores.get(key)
+                wt  = cfg["weight"]
+                if raw is not None and raw > 0:
+                    score_str = f"{raw * wt / 100:.0f}/{wt}"
+                else:
+                    score_str = "—"
+
+                st.markdown(f"""
+                <div class="comp-row">
+                  <div class="comp-dot" style="background:{cfg['color']};"></div>
+                  <div class="comp-info">
+                    <div class="comp-label">{cfg['label']}</div>
+                    <div class="comp-sub">{cfg['sublabel']}</div>
+                  </div>
+                  <div class="comp-score">{score_str}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # Interpretation
+            fa_interp = fa_data.get("interpretation", "")
+            if fa_interp:
+                clean_fa = clean_interp(fa_interp)
+                if clean_fa:
+                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    st.markdown('<div class="section-header">About This ZIP Code</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="interp-text">{clean_fa}</div>', unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+            # How it's calculated
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown('<div class="section-header">How the Score Is Calculated</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-sub">Tap any factor to learn more</div>', unsafe_allow_html=True)
+
+            for key, cfg in FA_COMPONENT_CONFIG.items():
+                st.markdown(f"""
+                <details>
+                  <summary>
+                    <span style="display:inline-block;width:9px;height:9px;border-radius:50%;
+                          background:{cfg['color']};flex-shrink:0;"></span>
+                    <strong>{cfg['label']}</strong>
+                    <span style="color:#AAAAAA;font-weight:400;font-size:0.82rem;margin-left:4px;">
+                      · {cfg['weight']}% of total
+                    </span>
+                  </summary>
+                  <div>{cfg['explain']}</div>
+                </details>
+                """, unsafe_allow_html=True)
+
+            st.markdown("""
+            <details>
+              <summary>
+                <strong>Grade Scale</strong>
+              </summary>
+              <div style="line-height:2.1;">
+                <span style="color:#386641;font-weight:700;">A (≥ 80)</span> — Excellent food access environment<br>
+                <span style="color:#6A994E;font-weight:700;">B (65–79)</span>  — Above average food access conditions<br>
+                <span style="color:#B87A1A;font-weight:700;">C (50–64)</span>  — Moderate conditions; some food access gaps<br>
+                <span style="color:#C05020;font-weight:700;">D (35–49)</span>  — Limited food access and elevated health concerns<br>
+                <span style="color:#A01818;font-weight:700;">F (< 35)</span>   — Significant food access challenges
+              </div>
+            </details>
+            """, unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # Metro comparison
+            if fa_metro:
+                with st.expander(f"📊  Compare to other ZIP codes in {fa_metro_t}"):
+                    with st.spinner("Loading metro data…"):
+                        fa_peers = fetch_fa_metro_peers(fa_metro, limit=15)
+
+                    if not fa_peers:
+                        st.markdown(
+                            '<div style="color:#AAA;font-size:0.88rem;padding:8px 0;">No peer data available.</div>',
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        fa_max_score = max(p["composite_score"] for p in fa_peers)
+                        for p in fa_peers:
+                            z       = p["zipcode"]
+                            s       = p["composite_score"]
+                            g       = p["letter_grade"]
+                            bar_pct = int((s / fa_max_score) * 100) if fa_max_score else 0
+                            g_color = FA_GRADE_INFO.get(g, ("#888",))[0]
+                            bold    = "font-weight:700;" if z == zipcode_fa else ""
+                            hi      = "background:#EEF5E6;border-radius:8px;padding:2px 6px;" if z == zipcode_fa else ""
+
+                            st.markdown(f"""
+                            <div class="metro-row" style="{hi}">
+                              <div class="metro-zip" style="{bold}">{z}</div>
+                              <div class="metro-bar-wrap">
+                                <div class="metro-bar" style="width:{bar_pct}%;background:{g_color};"></div>
+                              </div>
+                              <div class="metro-score">{s:.0f}</div>
+                              <div class="metro-grade" style="color:{g_color};">{g}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+
 # ── FOOTER ────────────────────────────────────────────────────
 st.markdown("""
 <div style="text-align:center;margin-top:2.5rem;font-size:0.75rem;color:#CCCCCC;">
-  LaSalle Technologies &nbsp;·&nbsp; Data: EPA, CDC PLACES, BTS, NLCD, NASA VIIRS &nbsp;·&nbsp; 2023–2024
+  LaSalle Technologies &nbsp;·&nbsp; Data: EPA, CDC PLACES, BTS, NLCD, NASA VIIRS, USDA &nbsp;·&nbsp; 2023–2024
 </div>
 """, unsafe_allow_html=True)
