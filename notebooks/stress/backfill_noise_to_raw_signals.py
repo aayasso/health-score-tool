@@ -64,6 +64,20 @@ log("INFO", f"Read {len(all_rows)} rows with noise_raw from cardiovascular_score
 if len(all_rows) == 0:
     raise RuntimeError("No noise_raw data found in cardiovascular_scores — nothing to backfill")
 
+# ── Refresh PostgREST schema cache ────────────────────────────
+# Required after creating/altering tables so PostgREST sees new columns.
+# Prerequisite: run this DDL once in the Supabase SQL Editor:
+#
+#   CREATE OR REPLACE FUNCTION notify_pgrst() RETURNS void AS $$
+#   BEGIN
+#     NOTIFY pgrst, 'reload schema';
+#   END;
+#   $$ LANGUAGE plpgsql;
+#
+log("INFO", "Refreshing PostgREST schema cache")
+supabase.rpc("notify_pgrst", {}).execute()
+log("PASS", "Schema cache refreshed")
+
 # ── Write to raw_signals with compound upsert ────────────────
 failed_zips = []
 written = 0

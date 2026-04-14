@@ -193,44 +193,47 @@ def assign_grade(score: float) -> str:
 # ```
 
 # %% [markdown]
-# ## 2 · BTS Noise Ingestion (from raw_signals)
+# ## 2 · BTS Noise Ingestion (from cardiovascular_scores)
 #
-# Noise data was processed and written to `raw_signals` during the Cardiovascular (Tool 2) pipeline.
-# We reuse it here — no raster processing needed. Same data, different narrative framing:
+# Noise data was processed during the Cardiovascular (Tool 2) pipeline and stored in
+# `cardiovascular_scores.noise_raw`. We read it directly — no `raw_signals` dependency needed.
+# Same data, different narrative framing:
 # Cardiovascular = physiological stress on heart; Stress = psychological burden (annoyance, sleep disruption).
 #
 # **If this section fails:** Stop, copy the error, bring it to Claude Code. The most likely issue
-# is that the Cardiovascular pipeline has not yet been run, so `raw_signals` has no BTS noise data.
+# is that the Cardiovascular pipeline has not yet been run.
 
 # %%
-log("START", "Loading BTS noise data from raw_signals (reuse from Cardiovascular pipeline)")
+log("START", "Loading BTS noise data from cardiovascular_scores (direct reuse)")
 
-# Verify noise data exists in raw_signals
-noise_check = supabase.table("raw_signals") \
-    .select("zipcode", count="exact") \
-    .eq("data_source", "bts_noise") \
-    .execute()
-noise_count = noise_check.count or 0
+# Read noise_raw directly from cardiovascular_scores — no raw_signals dependency needed
+all_noise_rows = []
+batch_size = 500
+_offset = 0
 
-if noise_count < 550:
+while True:
+    resp = supabase.table("cardiovascular_scores") \
+        .select("zipcode, noise_raw") \
+        .not_.is_("noise_raw", "null") \
+        .range(_offset, _offset + batch_size - 1) \
+        .execute()
+    if not resp.data:
+        break
+    all_noise_rows.extend(resp.data)
+    if len(resp.data) < batch_size:
+        break
+    _offset += batch_size
+
+if len(all_noise_rows) < 550:
     raise RuntimeError(
-        f"BTS noise data not found in raw_signals ({noise_count} rows, need ≥550). "
-        f"Run the Cardiovascular pipeline first to process and write BTS noise data."
+        f"BTS noise data not found in cardiovascular_scores ({len(all_noise_rows)} rows, need ≥550). "
+        f"Run the Cardiovascular pipeline first."
     )
 
-log("PASS", f"BTS noise data confirmed in raw_signals: {noise_count} rows")
-
-# Load noise values
-noise_result = supabase.table("raw_signals") \
-    .select("zipcode, raw_value") \
-    .eq("data_source", "bts_noise") \
-    .execute()
-
-df_noise = pd.DataFrame(noise_result.data)
-df_noise = df_noise.rename(columns={"raw_value": "noise_raw"})
+df_noise = pd.DataFrame(all_noise_rows)
 df_noise["noise_raw"] = pd.to_numeric(df_noise["noise_raw"], errors="coerce")
 
-log("INFO", f"Loaded {len(df_noise)} noise values from raw_signals")
+log("PASS", f"BTS noise data confirmed: {len(df_noise)} rows from cardiovascular_scores")
 log("INFO", f"  Range: {df_noise['noise_raw'].min():.1f} – {df_noise['noise_raw'].max():.1f} dB DNL")
 
 

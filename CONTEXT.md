@@ -199,9 +199,31 @@ A neighborhood-level health environment scoring system measuring the environment
 6. Begin Tool 4 (Food Access) planning
 
 **Any issues or surprises:**
-- Noise data reuse from raw_signals is straightforward — just a Supabase read, no raster work
+- Noise data reuse originally went through raw_signals; simplified in a later session to read directly from cardiovascular_scores
 - VIIRS global composite is large (~1.5GB) — per-state processing implemented to avoid RAM crashes
 - Stress tool 4th component confirmed as Poor Mental Health Days (MHLTH_CrudePrev), not crowding or social isolation
+
+### 2026-04-13 — Tool 3 Stress (Schema Cache Fix + Noise Source Simplification)
+**Completed:**
+- Added `NOTIFY pgrst, 'reload schema'` call to `notebooks/stress/backfill_noise_to_raw_signals.py` via `supabase.rpc("notify_pgrst")` — fixes PostgREST schema cache error when writing to newly created `raw_signals` table
+- Rewrote BTS noise ingestion in `notebooks/stress/stress_pipeline.py` to read directly from `cardiovascular_scores.noise_raw` instead of `raw_signals` — eliminates the backfill script dependency for Tool 3
+- Updated markdown documentation within both files to reflect new data flow
+- Updated Lessons Learned section (noise reuse pattern)
+
+**Left off at:**
+- Both scripts updated and pushed to GitHub
+- `notify_pgrst()` Postgres function must be created in Supabase SQL Editor before running backfill script
+- Stress pipeline can now run without the backfill script (for noise — VIIRS still writes to `raw_signals`)
+
+**Next session should start with:**
+1. Run `notify_pgrst()` DDL + `create_table.sql` in Supabase SQL Editor
+2. Execute stress pipeline in Colab — each gate must pass before proceeding
+3. After pipeline completes, verify Streamlit stress/sensory tab renders correctly
+4. Begin Tool 4 (Food Access) planning
+
+**Any issues or surprises:**
+- PostgREST schema cache must be refreshed after creating new tables — `NOTIFY pgrst, 'reload schema'` via an RPC function is the standard Supabase pattern
+- The `raw_signals` table is still used by VIIRS light pollution (write) and will be used by Heat tool (read impervious surface) — only the noise read was removed from the stress pipeline
 
 ---
 
@@ -222,7 +244,7 @@ A neighborhood-level health environment scoring system measuring the environment
 - BTS data comes as individual state rasters, not a single CONUS GeoTIFF.
 - **Do NOT merge state rasters** — this crashes Colab free-tier RAM.
 - Use `STATE_METRO_MAP` to filter ZIPs per state, then run `zonal_stats` per state independently.
-- Tool 3 (Stress) reuses noise values from `raw_signals` table — no raster processing needed.
+- Tool 3 (Stress) reuses noise values directly from `cardiovascular_scores.noise_raw` — no raster processing or `raw_signals` dependency needed.
 
 ### 3. NLCD Impervious Surface Nodata = 250.0
 - The correct nodata value for NLCD impervious surface rasters is `250.0`, not `255`.
