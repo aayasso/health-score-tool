@@ -242,7 +242,7 @@ log("INFO", f"  Range: {df_noise['noise_raw'].min():.1f} – {df_noise['noise_ra
 #
 # **If this section fails:** Stop, copy the error, bring it to Claude Code. Common issues:
 # missing VIIRS raster on Drive, CRS mismatch, or out-of-memory on global composite.
-# VIIRS is processed per-state (same pattern as BTS noise in Cardiovascular) to avoid RAM crashes.
+# VIIRS is a single global file — processed in one pass against all 600 ZIP polygons.
 
 # %%
 log("START", "Processing NASA VIIRS Light Pollution raster")
@@ -281,19 +281,10 @@ from rasterstats import zonal_stats
 # ── Paths (update these in Colab) ────────────────────────────
 DRIVE_PREFIX = "/content/drive/MyDrive/Colab Notebooks/health-score-data"
 
-# VIIRS can be a single CONUS/US file or the global composite.
-# If using the global composite, per-state processing avoids loading the entire file.
-VIIRS_RASTER_PATH = f"{DRIVE_PREFIX}/viirs_vnl_v2_annual.tif"
+# VIIRS global composite — single file, processed against all 600 ZIP polygons at once.
+VIIRS_RASTER_PATH = f"{DRIVE_PREFIX}/VNL_npp_2025_global_vcmslcfg_v2_c202604011200.average_masked.dat.tif"
 
 ZCTA_SHAPEFILE_PATH = f"{DRIVE_PREFIX}/tl_2023_us_zcta520/tl_2023_us_zcta520.shp"
-
-# Map each state to the metros whose ZIPs fall within that state's raster coverage
-STATE_METRO_MAP = {
-    "PA": ["Pittsburgh"],
-    "CA": ["Los Angeles"],
-    "AZ": ["Phoenix"],
-    "NC": ["Charlotte"],
-}
 
 if not viirs_already_done:
     log("INFO", f"Loading ZCTA shapefile from {ZCTA_SHAPEFILE_PATH}")
@@ -305,7 +296,8 @@ if not viirs_already_done:
     log("INFO", f"  Filtered ZCTA to {len(gdf_zcta)} of our ZIPs")
 
     # ── Process VIIRS raster ─────────────────────────────────
-    # Read raster metadata for CRS and nodata
+    # VIIRS is a single global raster — process all 600 ZIPs in one pass.
+    # Unlike BTS noise (per-state files), no state-level splitting is needed.
     with rasterio.open(VIIRS_RASTER_PATH) as src:
         viirs_crs = src.crs
         viirs_nodata = src.nodata
@@ -316,33 +308,18 @@ if not viirs_already_done:
 
     nodata_val = viirs_nodata if viirs_nodata is not None else -9999
 
-    # Process per-state to limit memory usage — only load raster data for relevant ZIPs
-    log("INFO", "  Processing VIIRS per state to limit memory usage...")
-    viirs_parts = []
+    log("INFO", f"  Running zonal_stats on all {len(gdf_viirs)} ZIPs...")
+    stats = zonal_stats(
+        gdf_viirs,
+        VIIRS_RASTER_PATH,
+        stats=["mean"],
+        geojson_out=False,
+        nodata=nodata_val,
+    )
 
-    for state, metros_in_state in STATE_METRO_MAP.items():
-        state_zips = [z for z, m in ZIP_METRO_MAP.items() if m in metros_in_state]
-        gdf_state = gdf_viirs[gdf_viirs["zipcode"].isin(state_zips)].copy()
-
-        if gdf_state.empty:
-            log("WARN", f"    {state}: no matching ZIPs — skipping")
-            continue
-
-        log("INFO", f"    {state}: {len(gdf_state)} ZIPs")
-
-        stats = zonal_stats(
-            gdf_state,
-            VIIRS_RASTER_PATH,
-            stats=["mean"],
-            geojson_out=False,
-            nodata=nodata_val,
-        )
-
-        gdf_state["light_pollution_raw"] = [s["mean"] for s in stats]
-        viirs_parts.append(gdf_state[["zipcode", "light_pollution_raw"]])
-        log("INFO", f"      Done — {gdf_state['light_pollution_raw'].notna().sum()} ZIPs with data")
-
-    df_viirs = pd.concat(viirs_parts, ignore_index=True)
+    gdf_viirs["light_pollution_raw"] = [s["mean"] for s in stats]
+    df_viirs = gdf_viirs[["zipcode", "light_pollution_raw"]].copy()
+    log("INFO", f"  Done — {df_viirs['light_pollution_raw'].notna().sum()} ZIPs with data")
 
     # Report on nulls
     null_viirs = df_viirs["light_pollution_raw"].isna().sum()
