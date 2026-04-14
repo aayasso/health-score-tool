@@ -916,6 +916,39 @@ else:
 # Do NOT modify the Supabase schema manually — bring the error here first.
 
 # %%
+# ── Reinitialize Supabase client (fresh HTTP connection) ─────
+# PostgREST may have a stale schema cache from earlier in the pipeline,
+# especially if food_access_scores was recently created. A fresh client
+# forces a new HTTP connection to avoid PGRST205 errors.
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+log("INFO", "Reinitialized Supabase client for upsert phase")
+
+# ── Schema cache warm-up ─────────────────────────────────────
+# Test SELECT to confirm PostgREST recognizes the table before we upsert 600 rows.
+MAX_RETRIES = 5
+RETRY_DELAY = 3
+
+for attempt in range(1, MAX_RETRIES + 1):
+    try:
+        test = supabase.table("food_access_scores").select("zipcode").limit(1).execute()
+        log("PASS", f"Schema cache warm-up succeeded on attempt {attempt}")
+        break
+    except Exception as e:
+        log("WARN", f"Schema cache warm-up attempt {attempt}/{MAX_RETRIES} failed: {e}")
+        if attempt < MAX_RETRIES:
+            time.sleep(RETRY_DELAY)
+else:
+    raise RuntimeError(
+        "\n" + "!" * 62 + "\n"
+        "  PostgREST cannot see the food_access_scores table after 5 attempts.\n"
+        "  This is a schema cache issue, not a missing table.\n\n"
+        "  FIX: Open Supabase SQL Editor and run:\n"
+        "    NOTIFY pgrst, 'reload schema';\n\n"
+        "  Wait 10 seconds, then re-run this cell.\n"
+        + "!" * 62 + "\n"
+    )
+
+# %%
 log("START", "Upserting all records to food_access_scores")
 
 failed_zips = []
