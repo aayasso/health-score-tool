@@ -72,12 +72,12 @@ def run_tests(suite_name: str, tests: list) -> int:
 
 TEST_ZIPS = ["15213", "90210", "28277", "85257"]
 TEST_ZIP_METROS = {
-    "15213": "pittsburgh",
-    "90210": "los angeles",
-    "28277": "charlotte",
-    "85257": "phoenix",
+    "15213": "Pittsburgh",
+    "90210": "Los Angeles",
+    "28277": "Charlotte",
+    "85257": "Phoenix",
 }
-EXPECTED_METROS = {"pittsburgh", "los angeles", "phoenix", "charlotte"}
+EXPECTED_METROS = {"Pittsburgh", "Los Angeles", "Phoenix", "Charlotte"}
 VALID_GRADES = {"A", "B", "C", "D", "F"}
 
 # Table configurations
@@ -252,7 +252,11 @@ for zc in TEST_ZIPS:
         if row:
             scores[t_label] = float(row["composite_score"]) if row.get("composite_score") is not None else None
             grades[t_label] = row.get(t_grade_col)
-            metros[t_label] = row.get("metro")
+            if t_table == "composite_scores":
+                zip_meta = get_row("zip_codes", zc)
+                metros[t_label] = zip_meta.get("metro") if zip_meta else None
+            else:
+                metros[t_label] = row.get("metro")
 
     # Check 1: All 5 tool scores exist
     cross_tests.append((
@@ -326,6 +330,10 @@ metro_tests = []
 
 for table, grade_col, dim_filter in TABLE_CONFIGS:
     label = TOOL_LABELS[table]
+
+    # composite_scores has no metro column — skip metro distribution for it
+    if table == "composite_scores":
+        continue
 
     for metro in sorted(EXPECTED_METROS):
         metro_tests.append((
