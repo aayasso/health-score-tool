@@ -10,12 +10,17 @@
         ↓
 [Google Colab Notebooks]  ← rasterio, geopandas, requests, pandas
         ↓
-[Supabase PostgreSQL]     ← persistent storage, upsert pattern
+[Supabase PostgreSQL]     ← persistent storage, upsert pattern, REST API auto-exposed
         ↓
-[Streamlit Community Cloud] ← public-facing tool, GitHub-linked deploy
+[Streamlit Community Cloud] ← current public-facing tool (being replaced)
+[Lovable / React]           ← next frontend — consumes Supabase REST API directly
         ↓
-[Claude API]              ← plain-language interpretation layer
+[Claude API]              ← plain-language interpretation layer (stored, not live-called)
 ```
+
+**Supabase project ref:** `hakiksjnpipgstomzzjy`
+**Streamlit app:** `health-score-tool-gnoxoobgjrakzvwnj4ktec.streamlit.app`
+**LaSalle site:** `lasalletech.ai` (built in Lovable)
 
 ---
 
@@ -36,9 +41,12 @@
 ## Supabase Design Principles
 
 - One table per tool for scores (clean separation, easy querying per dimension)
+- 6 score tables: `composite_scores`, `cardiovascular_scores`, `stress_scores`, `food_access_scores`, `heat_scores`, `overall_scores`
+- All score tables include `score_date` column for historical tracking / versioning
 - Shared `zip_codes` master table — never duplicate ZIP metadata
-- `score_config` table holds methodology config — never queried by Streamlit (internal only)
-- All tables use `UNIQUE(zip_code)` constraint to enable safe upserts
+- `score_config` table holds methodology config — never queried by frontend (internal only)
+- All tables use `UNIQUE(zipcode)` constraint to enable safe upserts
+- Supabase auto-exposes REST endpoints per table — Lovable can fetch directly using anon key
 - `updated_at` timestamp on every row for auditability — requires a Postgres trigger to auto-update on row change:
 
 ```sql
@@ -126,16 +134,20 @@ Two-layer protection for proprietary methodology:
 
 ## Deployment
 
-- **Streamlit:** Deployed via Streamlit Community Cloud, linked to `main` branch of GitHub repo
-- **Deploy trigger:** Push to `main` → automatic redeploy
-- **Secrets in Streamlit:** `SUPABASE_URL`, `SUPABASE_KEY`, `ANTHROPIC_API_KEY` stored in Streamlit secrets manager (not in repo)
+- **Streamlit (current):** Deployed via Streamlit Community Cloud, linked to `main` branch of GitHub repo
+  - App URL: `health-score-tool-gnoxoobgjrakzvwnj4ktec.streamlit.app`
+  - Deploy trigger: Push to `main` → automatic redeploy
+  - Secrets: `SUPABASE_URL`, `SUPABASE_KEY`, `ANTHROPIC_API_KEY` in Streamlit secrets manager
+- **Lovable (next):** React frontend at `lasalletech.ai`, consuming Supabase REST API directly
+  - Supabase project ref: `hakiksjnpipgstomzzjy`
+  - No backend proxy needed — Lovable fetches via Supabase anon key
 - **Colab notebooks:** Not deployed — run manually for data processing phases
 
 ---
 
 ## Scalability Notes
 
-Current scope: 600 ZIPs, 4 metros, part-time build.
+Current scope: 574 ZIPs scored, 4 metros, all 5 tools complete.
 
 Design decisions made with future scale in mind:
 - Upsert pattern supports expanding to new ZIPs without schema changes

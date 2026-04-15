@@ -5,20 +5,23 @@
 
 ## 1. Project Overview
 
-**LaSalle Technologies** is building a five-tool neighborhood-level health environment scoring platform called **The Health Environment Score**. It synthesizes federal data into scored, letter-graded dimensions across **600 ZIP codes** in four pilot metros: **Pittsburgh, Los Angeles, Phoenix, and Charlotte**.
+**LaSalle Technologies** has built a five-tool neighborhood-level health environment scoring platform called **The Health Environment Score**. It synthesizes federal data into scored, letter-graded dimensions across **574 ZIP codes** in four pilot metros: **Pittsburgh, Los Angeles, Phoenix, and Charlotte**. All 5 tools are complete and live.
 
 **Target completion:** April 30, 2026  
 **Repo:** `health-score-tool` (GitHub)  
 **Stack:** Google Colab → Supabase PostgreSQL → Streamlit Community Cloud → Claude API
 
-### The Five Tools
-| # | Tool | Status | Color Palette |
-|---|---|---|---|
-| 1 | 🫁 Respiratory Health Score | ✅ Complete | Green |
-| 2 | ❤️ Cardiovascular Health Score | 🔄 In Progress | Red/Pink |
-| 3 | 🧠 Stress / Sensory Environment Score | 🔜 Upcoming | Blue/Purple |
-| 4 | 🥦 Food Access Score | 🔜 Upcoming | Green/Yellow |
-| 5 | 🌡️ Heat & Climate Resilience Score | 🔜 Upcoming | Orange/Red |
+### The Five Tools + Overall
+| # | Tool | Table | Status | Color Palette |
+|---|---|---|---|---|
+| 1 | 🫁 Respiratory Health Score | `composite_scores` | ✅ Complete | Green |
+| 2 | ❤️ Cardiovascular Health Score | `cardiovascular_scores` | ✅ Complete | Red/Pink |
+| 3 | 🧠 Stress / Sensory Environment Score | `stress_scores` | ✅ Complete | Blue/Purple |
+| 4 | 🥦 Food Access Score | `food_access_scores` | ✅ Complete | Green/Yellow |
+| 5 | 🌡️ Heat & Climate Resilience Score | `heat_scores` | ✅ Complete | Orange/Red |
+| — | 📊 Overall Composite | `overall_scores` | ✅ Complete | — |
+
+**All 5 tools scored across 574 ZIPs in 4 metros. Overall scores computed as equal-weighted average of all 5 tool composites. All tables include `score_date` for historical tracking.**
 
 ---
 
@@ -526,3 +529,39 @@ At the start of every Claude Code session, complete these steps in order before 
 8. Produce a written plan per Section 2 format and wait for explicit approval before writing any code
 
 Do not proceed to step 8 until steps 2–7 are complete. Do not write code until the plan is approved.
+
+---
+
+## 12. Agent Roles
+
+Four specialized agent roles for ongoing development and QA:
+
+### Agent 1 — Data & Backend QA
+**Scope:** Runs `notebooks/qa/qa_data_integrity.py`, validates pipeline outputs, checks `score_date` versioning across all 6 tables.
+- Executes the 106-test QA suite and reports pass/fail
+- Validates that all tables have consistent `score_date` values after pipeline runs
+- Spot-checks row counts, null rates, and grade distributions
+- Flags any cross-table inconsistencies (e.g., ZIP in one table but not another)
+
+### Agent 2 — Frontend QA
+**Scope:** Verifies Streamlit (current) and Lovable (next) UI across all tabs and test ZIPs.
+- Tests all 5 tool tabs + overall with 4 test ZIPs: 15213, 90210, 28277, 85257
+- Validates disc visualization, component breakdown, interpretation text, metro peers
+- Checks graceful error handling (invalid ZIP, empty input)
+- Runs Suite 5 manual Streamlit smoke tests from `TESTING.md`
+
+### Agent 3 — Metro Expansion
+**Scope:** Runs all 5 tool pipelines plus overall for new metros, updates `zip_codes` table.
+- Adds new metro ZIPs to `zip_codes` table first
+- Executes all 5 pipelines (Respiratory, Cardiovascular, Stress, Food Access, Heat) for new ZIPs
+- Runs overall composite pipeline for new ZIPs
+- Re-runs QA suite to confirm new metro data passes all checks
+- Note: global normalization may need recalibration when new metros are added
+
+### Agent 4 — Frontend Build (Lovable)
+**Scope:** Builds Lovable React components consuming Supabase REST API directly.
+- Supabase project ref: `hakiksjnpipgstomzzjy` — auto-exposes REST endpoints per table
+- Lovable fetches directly using the Supabase anon key (no backend proxy needed)
+- Replicates all Streamlit UI features: ZIP lookup, disc viz, component breakdown, interpretation, metro peers
+- Maintains the public/proprietary boundary — no weights or methodology in frontend code
+- Target: replace Streamlit with Lovable at `lasalletech.ai`

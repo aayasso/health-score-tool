@@ -568,6 +568,31 @@ Step 6: Deploy Streamlit tab
 
 ---
 
+## Suite 6 — QA Data Integrity (Cross-Table, Automated)
+
+**Location:** `notebooks/qa/qa_data_integrity.py`
+**Test count:** 106 tests (as of 2026-04-15)
+**Status:** All passing
+
+This suite runs read-only checks against all 6 Supabase score tables and 4 metros. It is the final verification gate after all pipelines have completed.
+
+**What it covers:**
+- **Per-table integrity (6 tables × ~10 tests each):** row count ≥ 540, no null `composite_score`, no null grade, all 4 test ZIPs present, `score_date` non-null, valid grades, score range [0, 100]
+- **Cross-table consistency (4 test ZIPs × 5 checks each):** all 5 tool scores present, scores in range, grades valid, metro consistent across tables, overall ≈ mean of 5 tools (±1.0)
+- **Metro distribution (5 tables × 4 metros):** each metro has ≥ 20 ZIPs per table (skips `composite_scores` which has no `metro` column)
+
+**Test ZIPs:** Pittsburgh=15213, Los Angeles=90210, Charlotte=28277, Phoenix=85257
+
+**Running:**
+- In Colab: uncomment the secrets block, run all cells
+- Locally: set `SUPABASE_URL` and `SUPABASE_KEY` environment variables, then `python notebooks/qa/qa_data_integrity.py`
+
+**Known quirks:**
+- `composite_scores` (respiratory) has no `metro` column — metro lookups go through `zip_codes` table
+- Metro values in DB are title case ("Pittsburgh", "Los Angeles", etc.)
+
+---
+
 ## Debugging Checklist
 
 When a test fails, work through this checklist before modifying any code:

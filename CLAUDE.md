@@ -6,7 +6,7 @@
 
 ## Who You Are Working With
 
-You are building **The Health Environment Score** for **LaSalle Technologies** — a five-tool neighborhood-level health environment scoring platform covering 600 ZIP codes across Pittsburgh, Los Angeles, Phoenix, and Charlotte.
+You are building **The Health Environment Score** for **LaSalle Technologies** — a five-tool neighborhood-level health environment scoring platform covering 574 ZIP codes across Pittsburgh, Los Angeles, Phoenix, and Charlotte. All 5 tools are complete and live. The platform is now transitioning from Streamlit to Lovable (React + Supabase REST API).
 
 The platform is built on a **"public score, private engine"** model. Scores and letter grades are public. Methodology, weights, and normalization logic are proprietary. This distinction governs every file, comment, log, and UI element you touch.
 
@@ -84,10 +84,15 @@ When uncertain whether something is proprietary, treat it as proprietary and ask
 | Item | Detail |
 |---|---|
 | Pilot metros | Pittsburgh PA · Los Angeles CA · Phoenix AZ · Charlotte NC |
-| ZIP coverage | 600 ZIPs total across all 4 metros |
-| Active tool | Check `CONTEXT.md` — do not assume |
-| Tools | 1-Respiratory ✅ · 2-Cardiovascular 🔄 · 3-Stress ✅ · 4-Food Access 🔜 · 5-Heat 🔜 |
-| Stack | Colab → Supabase PostgreSQL → Streamlit Community Cloud → Claude API |
+| ZIP coverage | 574 ZIPs scored across all 4 metros |
+| Active tool | All 5 tools ✅ complete — see `CONTEXT.md` for next priorities |
+| Tools | 1-Respiratory ✅ · 2-Cardiovascular ✅ · 3-Stress ✅ · 4-Food Access ✅ · 5-Heat ✅ |
+| 6th table | `overall_scores` — equal-weighted average of all 5 tool composites |
+| Stack | Colab → Supabase PostgreSQL → Streamlit (current) → Lovable/React (next) → Claude API |
+| Supabase project | `hakiksjnpipgstomzzjy` — auto-exposes REST endpoints per table |
+| Streamlit app | `health-score-tool-gnoxoobgjrakzvwnj4ktec.streamlit.app` |
+| LaSalle site | `lasalletech.ai` (built in Lovable) |
+| QA suite | `notebooks/qa/qa_data_integrity.py` — 106/106 tests passing |
 | Scoring pipeline | Ingest → Validate → Normalize → Weight → Composite → Grade → Interpret → Upsert |
 | Grade scale | A ≥ 80 · B 65–79 · C 50–64 · D 35–49 · F < 35 |
 | Credentials | Colab secrets manager only — `SUPABASE_URL`, `SUPABASE_KEY`, `ANTHROPIC_API_KEY` |

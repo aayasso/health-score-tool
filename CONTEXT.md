@@ -4,26 +4,35 @@
 
 ---
 
-## Current Status (as of April 2026)
+## Current Status (as of 2026-04-15)
 
 ### Active Phase
-**Tool 5 — 🌡️ Heat & Climate Resilience Score**
+**All 5 tools complete. Transitioning to Lovable frontend.**
 
 ### What's Complete
-- Tool 1 (Respiratory) is fully live on Streamlit Community Cloud
-- Tool 3 (Stress / Sensory) pipeline executed successfully — 574 ZIPs scored, all 4 test suites passed (14/14, 26/26, 11/11, 13/13), data in `stress_scores` table, Streamlit tab built
-- Tool 4 (Food Access) pipeline executed successfully — 574 ZIPs scored, all 4 test suites passed (12/12, 20/20, 12/12, 15/15), data in `food_access_scores` table, Streamlit tab built
-- Supabase schema established: `zip_codes`, `raw_signals`, `score_components`, `composite_scores`, `interpretations`, `score_config`
-- Respiratory reference implementation is the pattern for all subsequent tools
-- 600 ZIP codes confirmed across Pittsburgh, LA, Phoenix, Charlotte
+- **All 5 tool pipelines executed** — 574 ZIPs scored across 4 metros (Pittsburgh, Los Angeles, Phoenix, Charlotte)
+- **6 Supabase score tables populated:**
+  - `composite_scores` (Respiratory) — 574 rows
+  - `cardiovascular_scores` — 574 rows
+  - `stress_scores` — 574 rows
+  - `food_access_scores` — 574 rows
+  - `heat_scores` — 574 rows
+  - `overall_scores` — equal-weighted average of all 5 tools, 574 rows
+- **All tables have `score_date` column** for historical tracking / score versioning
+- **QA suite:** `notebooks/qa/qa_data_integrity.py` — 106/106 tests passing (per-table integrity, cross-table consistency, metro distribution)
+- **Streamlit app live:** `health-score-tool-gnoxoobgjrakzvwnj4ktec.streamlit.app` — all 5 tabs + overall
+- **LaSalle Technologies site:** `lasalletech.ai` (built in Lovable)
+- Supabase schema established: `zip_codes`, `raw_signals`, `score_components`, `composite_scores`, `interpretations`, `score_config`, `cardiovascular_scores`, `stress_scores`, `food_access_scores`, `heat_scores`, `overall_scores`
 
-### What's In Progress
-- Cardiovascular pipeline script corrected with Colab-tested fixes — ready for re-execution
-- Cardiovascular Streamlit tab built — needs data in Supabase before it will display
-- Stress/Sensory Streamlit tab built — needs verification after pipeline data lands
+### What's In Progress / Next Session Priorities
+1. **Move frontend to Lovable** — replace Streamlit with React components consuming Supabase REST API directly
+   - Supabase project ref: `hakiksjnpipgstomzzjy`
+   - Supabase auto-exposes REST endpoints per table — Lovable can fetch directly using anon key
+2. **Expand metros** beyond the current 4 (Pittsburgh, LA, Phoenix, Charlotte)
+3. **Frontend polish** — design improvements, responsive layout, loading states
 
 ### What's Blocked / At Risk
-- Heat tool 4th component not yet confirmed
+- Nothing currently blocked — all 5 tools complete and verified
 
 ---
 
@@ -65,9 +74,10 @@ A neighborhood-level health environment scoring system measuring the environment
 - Bloomberg Philanthropies
 
 **Go-to-market timing:**
-- Dedicated LaSalle Technologies web page launches after full suite is complete (May 2026)
-- Streamlit tool is the public-facing product
-- Website page is the front door with segmented CTAs per audience
+- All 5 tools complete as of April 2026
+- Streamlit app live: `health-score-tool-gnoxoobgjrakzvwnj4ktec.streamlit.app`
+- LaSalle Technologies site: `lasalletech.ai` (built in Lovable)
+- Next: migrate scoring UI from Streamlit into Lovable site using Supabase REST API
 
 ---
 
@@ -328,6 +338,28 @@ A neighborhood-level health environment scoring system measuring the environment
 - Atlas STORES sheet has a title row before the real headers — needed `header=1`
 - `low_access_raw` range test hit floating point boundary at exactly 100.0 — widened tolerance
 
+### 2026-04-15 — All Tools Complete + QA Suite Fixes
+**Completed:**
+- Tool 5 (Heat & Climate) pipeline executed — 574 ZIPs scored, data in `heat_scores`
+- Tool 2 (Cardiovascular) pipeline executed — 574 ZIPs scored, data in `cardiovascular_scores`
+- Overall composite score pipeline: `overall_scores` table — equal-weighted average of all 5 tools
+- Score versioning: `score_date` column added to all 6 score tables
+- QA data integrity suite: `notebooks/qa/qa_data_integrity.py` — 106 tests across 6 tables, 4 metros
+- Fixed QA suite metro bugs: title case mismatch, `composite_scores` has no metro column (looks up via `zip_codes`)
+- Streamlit app live with all 5 tabs: `health-score-tool-gnoxoobgjrakzvwnj4ktec.streamlit.app`
+
+**Left off at:**
+- All 5 tools complete and verified. QA suite 106/106 passing.
+
+**Next session should start with:**
+1. Move frontend to Lovable using Supabase REST API (project ref: `hakiksjnpipgstomzzjy`)
+2. Expand metros beyond the current 4
+3. Frontend polish
+
+**Any issues or surprises:**
+- `composite_scores` table (respiratory) has no `metro` column — QA cross-table checks must look up metro from `zip_codes`
+- Metro values in DB are title case ("Pittsburgh", not "pittsburgh") — QA constants were lowercase, causing false failures
+
 ---
 
 ## Lessons Learned — Inherited by Tools 3–5
@@ -380,29 +412,23 @@ A neighborhood-level health environment scoring system measuring the environment
 ```
 health-score-tool/
 ├── CLAUDE.md                    ← auto-read by Claude Code at session start (entry point)
-├── AGENTS.md                    ← full methodology, rules, schema, standards
+├── AGENTS.md                    ← methodology, rules, schema, standards, agent roles
 ├── TOOL_SPECS.md                ← component weights and source specs (PROPRIETARY — do not expose)
 ├── CONTEXT.md                   ← this file — session state and handoff log
 ├── ARCHITECTURE.md              ← stable system design reference
-├── SESSION_KICKOFF.md           ← prompt template for starting each Claude Code session
-├── data/
-│   ├── zips/                    ← ZCTA shapefiles for raster aggregation
-│   └── rasters/                 ← cached processed raster outputs (gitignored — too large for repo)
+├── TESTING.md                   ← test suite templates and QA protocol
+├── app.py                       ← Streamlit main app entry point, tab-based navigation
 ├── notebooks/
 │   ├── respiratory/             ← REFERENCE IMPLEMENTATION — read before building any new tool
-│   ├── cardiovascular/
-│   ├── stress/
-│   ├── food_access/
-│   └── heat/
+│   ├── cardiovascular/          ← ✅ complete — 574 ZIPs in cardiovascular_scores
+│   ├── stress/                  ← ✅ complete — 574 ZIPs in stress_scores
+│   ├── food/                    ← ✅ complete — 574 ZIPs in food_access_scores
+│   ├── heat/                    ← ✅ complete — 574 ZIPs in heat_scores
+│   ├── overall/                 ← ✅ complete — 574 ZIPs in overall_scores
+│   └── qa/
+│       └── qa_data_integrity.py ← 106-test QA suite across all 6 tables and 4 metros
 ├── streamlit/
-│   ├── app.py                   ← main app entry point, tab-based navigation
-│   ├── tabs/
-│   │   ├── respiratory.py       ← REFERENCE IMPLEMENTATION for UI pattern
-│   │   ├── cardiovascular.py
-│   │   └── ...
-│   └── components/
-│       ├── disc_viz.py          ← shared Apple Health-style disc visualization
-│       └── interpretation.py    ← Claude API interpretation wrapper with caching
+│   └── tabs/                    ← per-tool Streamlit tab modules
 └── utils/
     ├── supabase_client.py       ← all Supabase interactions go through here
     ├── normalization.py         ← PROPRIETARY — gitignored on public branch
