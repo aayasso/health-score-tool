@@ -1,11 +1,12 @@
 # %% [markdown]
-# # Food Access Score — Full Pipeline
-# **Tool 4 of 5 · LaSalle Technologies Health Environment Score**
+# # Heat & Climate Resilience Score — Full Pipeline
+# **Tool 5 of 5 · LaSalle Technologies Health Environment Score**
 #
 # Run each cell in order. Every gate must pass before proceeding.
 # Designed for Google Colab with Supabase credentials in Colab secrets.
 #
-# **Purely tabular pipeline — no raster processing required.**
+# **Mixed pipeline: 1 raster (NLCD tree canopy), 1 reuse from Cardiovascular
+# (impervious surface), 1 tabular (CDC PLACES asthma + COPD).**
 
 # %% [markdown]
 # ## 0 · Setup & Configuration
@@ -16,14 +17,16 @@
 
 # %%
 # ── Installs (run once per Colab session) ────────────────────
-# !pip install -q supabase anthropic requests pandas
+# !pip install -q supabase rasterio geopandas rasterstats anthropic shapely requests pandas
 
 # %%
 import os
 import time
 import traceback
 import requests
+import numpy as np
 import pandas as pd
+import geopandas as gpd
 from datetime import datetime, date
 
 # Colab secrets — uncomment in Colab
@@ -136,10 +139,10 @@ log("INFO", f"Loaded {len(ALL_ZIPS)} ZIPs across {df_zips['metro'].nunique()} me
 log("INFO", f"Metro counts: {df_zips['metro'].value_counts().to_dict()}")
 
 # ── Component Weights (proprietary — do not expose) ─────────
-WEIGHTS = [0.35, 0.35, 0.30]
+WEIGHTS = [0.30, 0.35, 0.35]
 WEIGHT_LABELS = [
-    "low_access",
-    "grocery_density",
+    "impervious",
+    "tree_canopy",
     "health_outcome",
 ]
 assert abs(sum(WEIGHTS) - 1.0) < 1e-9, f"Weights sum to {sum(WEIGHTS)}, must equal 1.0"
@@ -161,18 +164,12 @@ def assign_grade(score: float) -> str:
 # ── Google Drive Paths ───────────────────────────────────────
 DRIVE_PREFIX = "/content/drive/MyDrive/Colab Notebooks/health-score-data"
 
-# USDA Food Access Research Atlas — tract-level food access data
-# Download from: https://www.ers.usda.gov/data-products/food-access-research-atlas/download-the-data/
-FARA_PATH = f"{DRIVE_PREFIX}/FoodAccessResearchAtlasData2019.xlsx"
+# NLCD Tree Canopy Coverage raster
+# Download from: https://www.mrlc.gov/data → select "NLCD Tree Canopy" → CONUS
+TREE_CANOPY_RASTER_PATH = f"{DRIVE_PREFIX}/nlcd_tree_canopy.tif"
 
-# USDA Food Environment Atlas — county-level food environment data
-# Download from: https://www.ers.usda.gov/data-products/food-environment-atlas/
-ATLAS_PATH = f"{DRIVE_PREFIX}/FoodEnvironmentAtlas.xlsx"
-
-# HUD USPS Crosswalk files
-# Download from: https://www.huduser.gov/portal/datasets/usps_crosswalk.html
-TRACT_ZIP_CROSSWALK_PATH = f"{DRIVE_PREFIX}/TRACT_ZIP_032025.xlsx"
-ZIP_COUNTY_CROSSWALK_PATH = f"{DRIVE_PREFIX}/ZIP_COUNTY_032025.xlsx"
+# ZCTA shapefile (same as used in Tools 2–3)
+ZCTA_SHAPEFILE_PATH = f"{DRIVE_PREFIX}/tl_2023_us_zcta520/tl_2023_us_zcta520.shp"
 
 
 # %% [markdown]
@@ -180,14 +177,14 @@ ZIP_COUNTY_CROSSWALK_PATH = f"{DRIVE_PREFIX}/ZIP_COUNTY_032025.xlsx"
 # Run this SQL in the Supabase SQL Editor **once** before proceeding:
 #
 # ```sql
-# CREATE TABLE IF NOT EXISTS food_access_scores (
+# CREATE TABLE IF NOT EXISTS heat_scores (
 #   id SERIAL PRIMARY KEY,
 #   zipcode TEXT NOT NULL,
 #   metro TEXT NOT NULL,
-#   low_access_raw NUMERIC,
-#   low_access_normalized NUMERIC,
-#   grocery_density_raw NUMERIC,
-#   grocery_density_normalized NUMERIC,
+#   impervious_raw NUMERIC,
+#   impervious_normalized NUMERIC,
+#   tree_canopy_raw NUMERIC,
+#   tree_canopy_normalized NUMERIC,
 #   health_outcome_raw NUMERIC,
 #   health_outcome_normalized NUMERIC,
 #   composite_score NUMERIC,
@@ -199,224 +196,146 @@ ZIP_COUNTY_CROSSWALK_PATH = f"{DRIVE_PREFIX}/ZIP_COUNTY_032025.xlsx"
 # );
 #
 # -- Auto-update timestamp trigger
-# CREATE TRIGGER set_updated_at_food
-# BEFORE UPDATE ON food_access_scores
+# CREATE TRIGGER set_updated_at_heat
+# BEFORE UPDATE ON heat_scores
 # FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 # ```
 
 
 # %% [markdown]
-# ## 2 · USDA FARA Ingestion (Tract-Level → ZCTA Crosswalk)
+# ## 2 · Impervious Surface Ingestion (from cardiovascular_scores)
 #
-# The Food Access Research Atlas provides tract-level data on population counts
-# living beyond certain distances from a supermarket. We compute `lapophalf_share`
-# (% of population >0.5mi from supermarket), then crosswalk to ZIP using the
-# HUD USPS Tract-ZIP crosswalk with population-weighted aggregation.
+# Impervious surface was processed during the Cardiovascular (Tool 2) pipeline and
+# stored in `cardiovascular_scores.impervious_raw`. We read it directly — same pattern
+# as noise reuse in Tool 3. No raster reprocessing needed.
 #
-# **If this section fails:** Stop, copy the error, bring it to Claude Code. Common issues:
-# Excel column names differ from expected, crosswalk file format mismatch, or Drive path wrong.
+# **If this section fails:** Stop, copy the error, bring it to Claude Code. The most likely
+# issue is that the Cardiovascular pipeline has not yet been run.
 
 # %%
-log("START", "Ingesting USDA Food Access Research Atlas (FARA)")
+log("START", "Loading impervious surface data from cardiovascular_scores (direct reuse)")
 
-# ── Load FARA data ───────────────────────────────────────────
-log("INFO", f"Loading FARA from {FARA_PATH}")
-df_fara_raw = pd.read_excel(FARA_PATH, sheet_name="Food Access Research Atlas")
+# Read impervious_raw directly from cardiovascular_scores
+all_imp_rows = []
+batch_size = 500
+_offset = 0
 
-log("INFO", f"FARA columns: {list(df_fara_raw.columns)}")
-log("INFO", f"FARA rows: {len(df_fara_raw)}")
+while True:
+    resp = supabase.table("cardiovascular_scores") \
+        .select("zipcode, impervious_raw") \
+        .not_.is_("impervious_raw", "null") \
+        .range(_offset, _offset + batch_size - 1) \
+        .execute()
+    if not resp.data:
+        break
+    all_imp_rows.extend(resp.data)
+    if len(resp.data) < batch_size:
+        break
+    _offset += batch_size
 
-# Key fields: CensusTract, lapophalf (low access pop at 0.5 mi), Pop2010
-# Column names may vary — log and match flexibly
-fara_cols = df_fara_raw.columns.tolist()
-log("INFO", f"First 20 columns: {fara_cols[:20]}")
-
-# Convert CensusTract to string for joining
-df_fara_raw["CensusTract"] = df_fara_raw["CensusTract"].astype(str).str.zfill(11)
-
-# Compute low access share: % of tract population >0.5mi from supermarket
-df_fara_raw["lapophalf"] = pd.to_numeric(df_fara_raw["lapophalf"], errors="coerce")
-df_fara_raw["Pop2010"] = pd.to_numeric(df_fara_raw["Pop2010"], errors="coerce")
-
-# Filter out tracts with zero or null population
-df_fara_raw = df_fara_raw[df_fara_raw["Pop2010"] > 0].copy()
-
-df_fara_raw["lapophalf_share"] = (df_fara_raw["lapophalf"] / df_fara_raw["Pop2010"]) * 100.0
-
-log("INFO", f"FARA tracts with data: {len(df_fara_raw)}")
-log("INFO", f"lapophalf_share range: {df_fara_raw['lapophalf_share'].min():.1f}% – {df_fara_raw['lapophalf_share'].max():.1f}%")
-
-# %%
-# ── Load HUD Tract-ZIP Crosswalk ─────────────────────────────
-log("INFO", f"Loading HUD Tract-ZIP crosswalk from {TRACT_ZIP_CROSSWALK_PATH}")
-df_tract_zip = pd.read_excel(TRACT_ZIP_CROSSWALK_PATH)
-
-log("INFO", f"Tract-ZIP crosswalk columns: {list(df_tract_zip.columns)}")
-log("INFO", f"Tract-ZIP crosswalk rows: {len(df_tract_zip)}")
-
-# Standardize column names — HUD uses TRACT, ZIP, RES_RATIO
-# Column names may be uppercase or mixed case
-df_tract_zip.columns = [c.upper().strip() for c in df_tract_zip.columns]
-log("INFO", f"Tract-ZIP columns (uppercased): {list(df_tract_zip.columns)}")
-
-# TRACT field is the 11-digit FIPS tract code
-df_tract_zip["TRACT"] = df_tract_zip["TRACT"].astype(str).str.zfill(11)
-df_tract_zip["ZIP"] = df_tract_zip["ZIP"].astype(str).str.zfill(5)
-df_tract_zip["RES_RATIO"] = pd.to_numeric(df_tract_zip["RES_RATIO"], errors="coerce")
-
-# %%
-# ── Join FARA to Crosswalk and Aggregate to ZIP ──────────────
-log("INFO", "Joining FARA tract data to HUD crosswalk")
-
-df_fara_joined = df_fara_raw[["CensusTract", "lapophalf_share", "Pop2010"]].merge(
-    df_tract_zip[["TRACT", "ZIP", "RES_RATIO"]],
-    left_on="CensusTract",
-    right_on="TRACT",
-    how="inner",
-)
-
-log("INFO", f"Joined rows: {len(df_fara_joined)}")
-
-# Population-weighted aggregation per ZIP:
-# weighted_avg = sum(lapophalf_share * Pop2010 * RES_RATIO) / sum(Pop2010 * RES_RATIO)
-df_fara_joined["weight"] = df_fara_joined["Pop2010"] * df_fara_joined["RES_RATIO"]
-df_fara_joined["weighted_value"] = df_fara_joined["lapophalf_share"] * df_fara_joined["weight"]
-
-df_fara_agg = df_fara_joined.groupby("ZIP").agg(
-    weighted_sum=("weighted_value", "sum"),
-    weight_sum=("weight", "sum"),
-).reset_index()
-
-df_fara_agg["low_access_raw"] = df_fara_agg["weighted_sum"] / df_fara_agg["weight_sum"]
-df_fara_agg = df_fara_agg.rename(columns={"ZIP": "zipcode"})
-
-# Filter to our master ZIPs
-df_fara = df_fara_agg[df_fara_agg["zipcode"].isin(ALL_ZIPS)][["zipcode", "low_access_raw"]].copy()
-
-log("INFO", f"FARA: {len(df_fara)} of our ZIPs matched")
-log("INFO", f"low_access_raw range: {df_fara['low_access_raw'].min():.2f}% – {df_fara['low_access_raw'].max():.2f}%")
-
-
-# %% [markdown]
-# ## 3 · USDA Food Environment Atlas Ingestion (County → ZIP)
-#
-# The Atlas provides county-level food environment metrics. We use `GROCPTH16`
-# (grocery stores per 1,000 population). We crosswalk from ZIP to county using
-# HUD ZIP-County crosswalk (primary county by highest RES_RATIO).
-#
-# **If this section fails:** Stop, copy the error, bring it to Claude Code. Common issues:
-# Excel sheet name differs, FIPS column formatting, or crosswalk column mismatch.
-
-# %%
-log("START", "Ingesting USDA Food Environment Atlas")
-
-# ── Load Atlas data ──────────────────────────────────────────
-log("INFO", f"Loading Atlas from {ATLAS_PATH}")
-
-# The Atlas Excel has multiple sheets — the grocery data is typically in "ACCESS"
-# or "STORES". Try "STORES" first (contains GROCPTH16).
-try:
-    # header=1: row 0 is a title row, real column names are in row 1
-    df_atlas_raw = pd.read_excel(ATLAS_PATH, sheet_name="STORES", header=1)
-    log("INFO", "Loaded 'STORES' sheet from Atlas (header=1)")
-except ValueError:
-    # Fall back to trying other common sheet names
-    xls = pd.ExcelFile(ATLAS_PATH)
-    log("INFO", f"Available Atlas sheets: {xls.sheet_names}")
+if len(all_imp_rows) < 550:
     raise RuntimeError(
-        f"'STORES' sheet not found in Atlas file. Available sheets: {xls.sheet_names}. "
-        f"Bring this error to Claude Code."
+        f"Impervious surface data not found in cardiovascular_scores ({len(all_imp_rows)} rows, need ≥550). "
+        f"Run the Cardiovascular pipeline first."
     )
 
-log("INFO", f"Atlas columns ({len(df_atlas_raw.columns)}): {list(df_atlas_raw.columns)}")
-log("INFO", f"Atlas rows: {len(df_atlas_raw)}")
+df_impervious = pd.DataFrame(all_imp_rows)
+df_impervious["impervious_raw"] = pd.to_numeric(df_impervious["impervious_raw"], errors="coerce")
 
-# Verify required columns are present
-for required_col in ["FIPS", "GROCPTH16"]:
-    if required_col not in df_atlas_raw.columns:
-        log("ERROR", f"Required column '{required_col}' not found in Atlas. "
-            f"Available columns: {list(df_atlas_raw.columns)}")
-        raise RuntimeError(
-            f"Column '{required_col}' missing from STORES sheet. "
-            f"Bring this error to Claude Code."
-        )
-
-# FIPS is the county FIPS code, GROCPTH16 is grocery stores per 1,000 pop
-df_atlas_raw["FIPS"] = df_atlas_raw["FIPS"].astype(str).str.zfill(5)
-df_atlas_raw["GROCPTH16"] = pd.to_numeric(df_atlas_raw["GROCPTH16"], errors="coerce")
-
-log("INFO", f"GROCPTH16 range: {df_atlas_raw['GROCPTH16'].min():.4f} – {df_atlas_raw['GROCPTH16'].max():.4f}")
-
-# %%
-# ── Load HUD ZIP-County Crosswalk ────────────────────────────
-log("INFO", f"Loading HUD ZIP-County crosswalk from {ZIP_COUNTY_CROSSWALK_PATH}")
-df_zip_county = pd.read_excel(ZIP_COUNTY_CROSSWALK_PATH)
-
-log("INFO", f"ZIP-County crosswalk columns: {list(df_zip_county.columns)}")
-log("INFO", f"ZIP-County crosswalk rows: {len(df_zip_county)}")
-
-# Standardize column names
-df_zip_county.columns = [c.upper().strip() for c in df_zip_county.columns]
-log("INFO", f"ZIP-County columns (uppercased): {list(df_zip_county.columns)}")
-
-df_zip_county["ZIP"] = df_zip_county["ZIP"].astype(str).str.zfill(5)
-df_zip_county["COUNTY"] = df_zip_county["COUNTY"].astype(str).str.zfill(5)
-df_zip_county["RES_RATIO"] = pd.to_numeric(df_zip_county["RES_RATIO"], errors="coerce")
-
-# Use primary county (highest RES_RATIO) for each ZIP
-df_zip_primary_county = df_zip_county.sort_values("RES_RATIO", ascending=False) \
-    .drop_duplicates(subset=["ZIP"], keep="first")[["ZIP", "COUNTY"]]
-
-log("INFO", f"Primary county assignments: {len(df_zip_primary_county)} ZIPs")
-
-# %%
-# ── Join ZIP → County → Atlas ────────────────────────────────
-log("INFO", "Joining ZIPs to Atlas via county FIPS")
-
-df_atlas_joined = df_zip_primary_county.merge(
-    df_atlas_raw[["FIPS", "GROCPTH16"]],
-    left_on="COUNTY",
-    right_on="FIPS",
-    how="left",
-)
-
-df_atlas_joined = df_atlas_joined.rename(columns={
-    "ZIP": "zipcode",
-    "GROCPTH16": "grocery_density_raw",
-})
-
-# Filter to our master ZIPs
-df_atlas = df_atlas_joined[df_atlas_joined["zipcode"].isin(ALL_ZIPS)][
-    ["zipcode", "grocery_density_raw"]
-].copy()
-
-log("INFO", f"Atlas: {len(df_atlas)} of our ZIPs matched")
-log("INFO", f"grocery_density_raw range: {df_atlas['grocery_density_raw'].min():.4f} – {df_atlas['grocery_density_raw'].max():.4f}")
+log("PASS", f"Impervious surface data confirmed: {len(df_impervious)} rows from cardiovascular_scores")
+log("INFO", f"  Range: {df_impervious['impervious_raw'].min():.1f} – {df_impervious['impervious_raw'].max():.1f}%")
 
 
 # %% [markdown]
-# ## 4 · CDC PLACES Ingestion (Diabetes + Obesity)
+# ## 3 · NLCD Tree Canopy Raster Ingestion
+#
+# The NLCD Tree Canopy dataset provides percent tree canopy coverage per pixel.
+# We run zonal_stats (mean) against our ZCTA polygons. This is a single CONUS
+# file — processed in one pass like VIIRS in Tool 3.
+#
+# **If this section fails:** Stop, copy the error, bring it to Claude Code. Common issues:
+# missing raster on Drive, CRS mismatch, or nodata value mismatch.
+# Check nodata from raster metadata — do NOT hardcode.
+
+# %%
+log("START", "Processing NLCD Tree Canopy raster")
+
+import rasterio
+from rasterstats import zonal_stats
+
+# ── Load ZCTA shapefile ──────────────────────────────────────
+log("INFO", f"Loading ZCTA shapefile from {ZCTA_SHAPEFILE_PATH}")
+gdf_zcta = gpd.read_file(ZCTA_SHAPEFILE_PATH)
+
+# ZCTA 2020 vintage uses ZCTA5CE20 column
+gdf_zcta = gdf_zcta[gdf_zcta["ZCTA5CE20"].isin(ALL_ZIPS)].copy()
+gdf_zcta = gdf_zcta.rename(columns={"ZCTA5CE20": "zipcode"})
+log("INFO", f"  Filtered ZCTA to {len(gdf_zcta)} of our ZIPs")
+
+# %%
+log("INFO", f"Loading tree canopy raster from {TREE_CANOPY_RASTER_PATH}")
+
+with rasterio.open(TREE_CANOPY_RASTER_PATH) as src:
+    canopy_crs = src.crs
+    canopy_nodata = src.nodata
+    log("INFO", f"  Tree canopy CRS: {canopy_crs}, shape: {src.shape}, nodata: {canopy_nodata}")
+
+# Reproject ZCTA polygons to match raster CRS
+gdf_canopy = gdf_zcta.to_crs(canopy_crs)
+
+# Read nodata from metadata — do NOT hardcode (lesson from NLCD impervious nodata=250.0)
+canopy_nodata_val = canopy_nodata if canopy_nodata is not None else -9999
+log("INFO", f"  Using nodata value: {canopy_nodata_val}")
+
+log("INFO", f"  Running zonal_stats on all {len(gdf_canopy)} ZIPs...")
+canopy_stats = zonal_stats(
+    gdf_canopy,
+    TREE_CANOPY_RASTER_PATH,
+    stats=["mean"],
+    geojson_out=False,
+    nodata=canopy_nodata_val,
+)
+
+gdf_canopy["tree_canopy_raw"] = [s["mean"] for s in canopy_stats]
+df_canopy = gdf_canopy[["zipcode", "tree_canopy_raw"]].copy()
+
+log("INFO", f"  Done — {df_canopy['tree_canopy_raw'].notna().sum()} ZIPs with data")
+
+# Report on nulls
+null_canopy = df_canopy["tree_canopy_raw"].isna().sum()
+if null_canopy > 0:
+    log("WARN", f"  {null_canopy} ZIPs have no tree canopy data (raster nodata)")
+
+log("INFO", f"  Tree canopy range: {df_canopy['tree_canopy_raw'].min():.2f} – {df_canopy['tree_canopy_raw'].max():.2f}%")
+
+
+# %% [markdown]
+# ## 4 · CDC PLACES Ingestion (Asthma + COPD)
+#
+# Heat-sensitive respiratory health outcomes: current asthma and COPD prevalence.
+# These conditions are exacerbated by heat exposure and poor air quality in
+# neighborhoods with high impervious surface and low tree canopy.
 #
 # **If this section fails:** Stop, copy the error, bring it to Claude Code. Common issues:
 # API format changes (fields renamed), rate limits (HTTP 429), or ZIP matching failures.
 # Do NOT try to patch the query manually — the API schema has changed before (see CONTEXT.md).
 
 # %%
-log("START", "Ingesting CDC PLACES data for Diabetes and Obesity")
+log("START", "Ingesting CDC PLACES data for Asthma and COPD")
 
 CDC_BASE_URL = "https://data.cdc.gov/resource/c7b2-4ecy.json"
 
 # CDC PLACES API is WIDE format (confirmed April 2026):
 #   - One row per ZCTA, with separate columns for each measure
 #   - ZIP field is "zcta5" (not "locationname")
-#   - No "measureid" column — measures are column names like "diabetes_crudeprev"
+#   - No "measureid" column — measures are column names like "casthma_crudeprev"
 #   - Use $select to request only needed columns, $where to filter by zcta5
 #   - Batch size 50 ZIPs per request to stay within Socrata URL length limits
 
 def fetch_cdc_places_wide(zip_codes: list, select_cols: list, batch_size: int = 50) -> list:
     """
     Fetch CDC PLACES data in wide format, batching by ZIP to avoid URL length limits.
-    select_cols: columns to request, e.g. ["zcta5", "diabetes_crudeprev", "obesity_crudeprev"]
+    select_cols: columns to request, e.g. ["zcta5", "casthma_crudeprev", "copd_crudeprev"]
     Returns list of raw row dicts (one row per ZIP, already wide).
     """
     all_rows = []
@@ -452,8 +371,8 @@ def fetch_cdc_places_wide(zip_codes: list, select_cols: list, batch_size: int = 
     return all_rows
 
 # %%
-# Fetch diabetes and obesity in wide format
-CDC_SELECT_COLS = ["zcta5", "diabetes_crudeprev", "obesity_crudeprev"]
+# Fetch asthma and COPD in wide format
+CDC_SELECT_COLS = ["zcta5", "casthma_crudeprev", "copd_crudeprev"]
 
 log("INFO", f"Fetching CDC PLACES (wide format) for columns: {CDC_SELECT_COLS}")
 log("INFO", f"Total ZIPs to query: {len(ALL_ZIPS)}, batch size: 50")
@@ -469,29 +388,25 @@ log("INFO", f"CDC response columns: {list(df_cdc.columns)}")
 
 # Convert types and rename to internal column names
 df_cdc["zcta5"] = df_cdc["zcta5"].astype(str).str.strip()
-df_cdc["diabetes_crudeprev"] = pd.to_numeric(df_cdc["diabetes_crudeprev"], errors="coerce")
-df_cdc["obesity_crudeprev"] = pd.to_numeric(df_cdc["obesity_crudeprev"], errors="coerce")
+df_cdc["casthma_crudeprev"] = pd.to_numeric(df_cdc["casthma_crudeprev"], errors="coerce")
+df_cdc["copd_crudeprev"] = pd.to_numeric(df_cdc["copd_crudeprev"], errors="coerce")
 
-# Combine: health_outcome_raw = average of diabetes and obesity prevalence
-df_cdc["health_outcome_raw"] = (df_cdc["diabetes_crudeprev"] + df_cdc["obesity_crudeprev"]) / 2.0
+# Combine: health_outcome_raw = average of asthma and COPD prevalence
+df_cdc["health_outcome_raw"] = (df_cdc["casthma_crudeprev"] + df_cdc["copd_crudeprev"]) / 2.0
 
-df_food_cdc = df_cdc.rename(columns={"zcta5": "zipcode"})
-df_food_cdc = df_food_cdc.drop_duplicates(subset=["zipcode"], keep="first")
-
-# Keep diabetes and obesity raw values for reference (not stored in Supabase, just for logging)
-df_food_cdc["diabetes_raw"] = df_food_cdc["diabetes_crudeprev"]
-df_food_cdc["obesity_raw"] = df_food_cdc["obesity_crudeprev"]
+df_heat_cdc = df_cdc.rename(columns={"zcta5": "zipcode"})
+df_heat_cdc = df_heat_cdc.drop_duplicates(subset=["zipcode"], keep="first")
 
 # Add metro from master ZIP list
-df_food_cdc["metro"] = df_food_cdc["zipcode"].map(ZIP_METRO_MAP)
+df_heat_cdc["metro"] = df_heat_cdc["zipcode"].map(ZIP_METRO_MAP)
 
 # Filter to only our 600 ZIPs
-df_food_cdc = df_food_cdc[df_food_cdc["zipcode"].isin(ALL_ZIPS)].copy()
+df_heat_cdc = df_heat_cdc[df_heat_cdc["zipcode"].isin(ALL_ZIPS)].copy()
 
-log("INFO", f"CDC PLACES parsed: {len(df_food_cdc)} ZIPs with data")
-log("INFO", f"  Diabetes coverage: {df_food_cdc['diabetes_raw'].notna().sum()} ZIPs")
-log("INFO", f"  Obesity coverage: {df_food_cdc['obesity_raw'].notna().sum()} ZIPs")
-log("INFO", f"  health_outcome_raw range: {df_food_cdc['health_outcome_raw'].min():.1f} – {df_food_cdc['health_outcome_raw'].max():.1f}")
+log("INFO", f"CDC PLACES parsed: {len(df_heat_cdc)} ZIPs with data")
+log("INFO", f"  Asthma coverage: {df_heat_cdc['casthma_crudeprev'].notna().sum()} ZIPs")
+log("INFO", f"  COPD coverage: {df_heat_cdc['copd_crudeprev'].notna().sum()} ZIPs")
+log("INFO", f"  health_outcome_raw range: {df_heat_cdc['health_outcome_raw'].min():.1f} – {df_heat_cdc['health_outcome_raw'].max():.1f}")
 
 
 # %% [markdown]
@@ -504,13 +419,13 @@ log("INFO", f"  health_outcome_raw range: {df_food_cdc['health_outcome_raw'].min
 log("START", "Merging all three components into a single DataFrame")
 
 # Start from CDC data (has zipcode + metro + health_outcome_raw)
-df = df_food_cdc[["zipcode", "metro", "health_outcome_raw"]].copy()
+df = df_heat_cdc[["zipcode", "metro", "health_outcome_raw"]].copy()
 
-# Merge FARA (low access)
-df = df.merge(df_fara[["zipcode", "low_access_raw"]], on="zipcode", how="left")
+# Merge impervious surface
+df = df.merge(df_impervious[["zipcode", "impervious_raw"]], on="zipcode", how="left")
 
-# Merge Atlas (grocery density)
-df = df.merge(df_atlas[["zipcode", "grocery_density_raw"]], on="zipcode", how="left")
+# Merge tree canopy
+df = df.merge(df_canopy[["zipcode", "tree_canopy_raw"]], on="zipcode", how="left")
 
 # Ensure metro is filled for all ZIPs
 df["metro"] = df["zipcode"].map(ZIP_METRO_MAP)
@@ -519,7 +434,7 @@ df["metro"] = df["zipcode"].map(ZIP_METRO_MAP)
 df = df[df["zipcode"].isin(ALL_ZIPS)].copy()
 
 log("INFO", f"Merged DataFrame: {len(df)} rows")
-print_validation_report("FOOD ACCESS — MERGED RAW DATA", df)
+print_validation_report("HEAT & CLIMATE RESILIENCE — MERGED RAW DATA", df)
 
 # %% [markdown]
 # ## 5a · Ingestion Tests (Suite 1) — GATE
@@ -531,8 +446,8 @@ ingestion_tests = [
     ("All expected columns present",
         lambda: (
             all(c in df.columns for c in
-                ["zipcode", "metro", "low_access_raw", "grocery_density_raw", "health_outcome_raw"]),
-            f"Missing: {[c for c in ['zipcode','metro','low_access_raw','grocery_density_raw','health_outcome_raw'] if c not in df.columns]}"
+                ["zipcode", "metro", "impervious_raw", "tree_canopy_raw", "health_outcome_raw"]),
+            f"Missing: {[c for c in ['zipcode','metro','impervious_raw','tree_canopy_raw','health_outcome_raw'] if c not in df.columns]}"
         )),
     ("Row count >= 540",
         lambda: (len(df) >= 540, f"Got {len(df)}")),
@@ -554,29 +469,29 @@ ingestion_tests = [
             f"Counts: {df['metro'].value_counts().to_dict()}"
         )),
     # Raw value range checks
-    ("low_access_raw in [0, 100]",
+    ("impervious_raw in [0, 100]",
         lambda: (
-            df["low_access_raw"].dropna().between(-0.01, 100.01).all(),
-            f"min={df['low_access_raw'].min():.4f}, max={df['low_access_raw'].max():.4f}"
+            df["impervious_raw"].dropna().between(-0.01, 100.01).all(),
+            f"min={df['impervious_raw'].min():.1f}, max={df['impervious_raw'].max():.1f}"
         )),
-    ("low_access_raw nulls < 10%",
+    ("impervious_raw nulls < 10%",
         lambda: (
-            df["low_access_raw"].isna().sum() / len(df) < 0.10,
-            f"{df['low_access_raw'].isna().sum()} nulls ({df['low_access_raw'].isna().sum()/len(df)*100:.1f}%)"
+            df["impervious_raw"].isna().sum() / len(df) < 0.10,
+            f"{df['impervious_raw'].isna().sum()} nulls ({df['impervious_raw'].isna().sum()/len(df)*100:.1f}%)"
         )),
-    ("grocery_density_raw in [0, 5]",
+    ("tree_canopy_raw in [0, 100]",
         lambda: (
-            df["grocery_density_raw"].dropna().between(0, 5).all(),
-            f"min={df['grocery_density_raw'].min():.4f}, max={df['grocery_density_raw'].max():.4f}"
+            df["tree_canopy_raw"].dropna().between(-0.01, 100.01).all(),
+            f"min={df['tree_canopy_raw'].min():.2f}, max={df['tree_canopy_raw'].max():.2f}"
         )),
-    ("grocery_density_raw nulls < 10%",
+    ("tree_canopy_raw nulls < 10%",
         lambda: (
-            df["grocery_density_raw"].isna().sum() / len(df) < 0.10,
-            f"{df['grocery_density_raw'].isna().sum()} nulls ({df['grocery_density_raw'].isna().sum()/len(df)*100:.1f}%)"
+            df["tree_canopy_raw"].isna().sum() / len(df) < 0.10,
+            f"{df['tree_canopy_raw'].isna().sum()} nulls ({df['tree_canopy_raw'].isna().sum()/len(df)*100:.1f}%)"
         )),
-    ("health_outcome_raw in [5, 50]",
+    ("health_outcome_raw in [2, 30]",
         lambda: (
-            df["health_outcome_raw"].dropna().between(5, 50).all(),
+            df["health_outcome_raw"].dropna().between(2, 30).all(),
             f"min={df['health_outcome_raw'].min():.1f}, max={df['health_outcome_raw'].max():.1f}"
         )),
     ("health_outcome_raw nulls < 10%",
@@ -586,16 +501,16 @@ ingestion_tests = [
         )),
 ]
 
-suite1_passed = run_tests("FOOD ACCESS — INGESTION", ingestion_tests)
-require_all_pass("FOOD ACCESS — INGESTION", suite1_passed)
+suite1_passed = run_tests("HEAT & CLIMATE RESILIENCE — INGESTION", ingestion_tests)
+require_all_pass("HEAT & CLIMATE RESILIENCE — INGESTION", suite1_passed)
 
 
 # %% [markdown]
 # ## 6 · Normalization
 # Min-max normalization, global across all 600 ZIPs.
-# - `low_access_raw` → **INVERT** (higher raw = worse — more people far from supermarkets)
-# - `grocery_density_raw` → **DO NOT INVERT** (higher raw = better — more grocery stores)
-# - `health_outcome_raw` → **INVERT** (higher raw = worse — more diabetes/obesity)
+# - `impervious_raw` → **INVERT** (higher raw = more paved = worse)
+# - `tree_canopy_raw` → **DO NOT INVERT** (higher raw = more trees = better)
+# - `health_outcome_raw` → **INVERT** (higher raw = more asthma/COPD = worse)
 #
 # **If this section fails:** Stop, copy the error, bring it to Claude Code. Normalization
 # failures typically mean a column has all-null or constant values from a broken ingestion step.
@@ -603,8 +518,8 @@ require_all_pass("FOOD ACCESS — INGESTION", suite1_passed)
 # %%
 log("START", "Normalizing all three components")
 
-RAW_COLS = ["low_access_raw", "grocery_density_raw", "health_outcome_raw"]
-NORM_COLS = ["low_access_normalized", "grocery_density_normalized", "health_outcome_normalized"]
+RAW_COLS = ["impervious_raw", "tree_canopy_raw", "health_outcome_raw"]
+NORM_COLS = ["impervious_normalized", "tree_canopy_normalized", "health_outcome_normalized"]
 # True = inverted (higher raw → lower normalized)
 INVERT_FLAGS = [True, False, True]
 
@@ -633,7 +548,7 @@ for norm_col in NORM_COLS:
         log("WARN", f"  {norm_col}: {null_count} nulls (from raw data gaps)")
 
 # ── Median imputation for any remaining nulls ────────────────
-# FARA crosswalk may have gaps for some ZIPs. Impute with median
+# Raster coverage gaps may leave some ZIPs null. Impute with median
 # so nulls don't propagate into the composite score.
 for norm_col in NORM_COLS:
     nulls = df[norm_col].isna()
@@ -643,7 +558,7 @@ for norm_col in NORM_COLS:
         df.loc[nulls, norm_col] = median_val
         log("INFO", f"  Imputed {len(imputed_zips)} {norm_col} nulls with median ({median_val:.2f}): {imputed_zips[:10]}")
 
-print_validation_report("FOOD ACCESS — NORMALIZED", df)
+print_validation_report("HEAT & CLIMATE RESILIENCE — NORMALIZED", df)
 
 # %% [markdown]
 # ## 6a · Normalization Tests (Suite 2) — GATE
@@ -688,7 +603,7 @@ for norm_col in NORM_COLS:
             )),
     ]
 
-# Inversion correctness: low_access and health_outcome are inverted
+# Inversion correctness: impervious and health_outcome are inverted, tree_canopy is not
 for norm_col, raw_col, invert in zip(NORM_COLS, RAW_COLS, INVERT_FLAGS):
     if invert:
         nc, rc = norm_col, raw_col
@@ -710,8 +625,8 @@ for norm_col, raw_col, invert in zip(NORM_COLS, RAW_COLS, INVERT_FLAGS):
             )
         ))
 
-suite2_passed = run_tests("FOOD ACCESS — NORMALIZATION", norm_tests)
-require_all_pass("FOOD ACCESS — NORMALIZATION", suite2_passed)
+suite2_passed = run_tests("HEAT & CLIMATE RESILIENCE — NORMALIZATION", norm_tests)
+require_all_pass("HEAT & CLIMATE RESILIENCE — NORMALIZATION", suite2_passed)
 
 
 # %% [markdown]
@@ -747,13 +662,12 @@ GRADE_SCALE = {
 }
 
 # Spot-check ZIPs: expect general grade direction
-# Beverly Hills (90210) should not be F — affluent area with grocery access
-# Low-income urban ZIPs should not be A
+# Phoenix ZIPs should tend lower (less canopy, more pavement); tree-heavy suburban ZIPs higher
 SPOT_CHECK_ZIPS = {
-    "15213": ("F", "A"),   # Pittsburgh — Carnegie Mellon area, mixed
-    "90210": ("C", "A"),   # Beverly Hills — good grocery access expected
-    "28202": ("F", "B"),   # Downtown Charlotte — urban core
-    "85281": ("F", "A"),   # Tempe, AZ — near ASU, suburban/urban mix
+    "15213": ("F", "A"),   # Pittsburgh — Carnegie Mellon area, moderate canopy
+    "90210": ("C", "A"),   # Beverly Hills — tree-covered, good air
+    "28202": ("F", "B"),   # Downtown Charlotte — urban core, more impervious
+    "85281": ("F", "B"),   # Tempe, AZ — desert, less canopy, more pavement
 }
 
 # Grade order: A=0 (best) … F=4 (worst)
@@ -818,8 +732,8 @@ for zip_code, (min_g, max_g) in SPOT_CHECK_ZIPS.items():
         )
     ))
 
-suite3_passed = run_tests("FOOD ACCESS — SCORING", scoring_tests)
-require_all_pass("FOOD ACCESS — SCORING", suite3_passed)
+suite3_passed = run_tests("HEAT & CLIMATE RESILIENCE — SCORING", scoring_tests)
+require_all_pass("HEAT & CLIMATE RESILIENCE — SCORING", suite3_passed)
 
 
 # %% [markdown]
@@ -835,15 +749,16 @@ import anthropic
 
 client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
 
-def generate_food_interpretation(zipcode: str, composite_score: float,
+def generate_heat_interpretation(zipcode: str, composite_score: float,
                                   letter_grade: str, components: dict) -> str:
     """
-    Generate a plain-language food access interpretation.
+    Generate a plain-language heat & climate resilience interpretation.
     components: dict of {label: normalized_score} — qualitative labels only, no weights.
-    Framing: proximity to fresh food, grocery availability, diet-related health outcomes.
+    Framing: pavement/cooling capacity, tree shade, and heat-sensitive respiratory health.
     """
     prompt = f"""You are a public health analyst writing a plain-language summary for residents and
-real estate professionals. Write 2-3 sentences interpreting this neighborhood's food access score.
+real estate professionals. Write 2-3 sentences interpreting this neighborhood's heat and climate
+resilience score.
 
 ZIP Code: {zipcode}
 Score: {composite_score:.1f}/100 (Grade: {letter_grade})
@@ -855,12 +770,12 @@ Rules:
 - Do not mention scores, percentages, or numbers from the components
 - Do not reveal how components are weighted or combined
 - Do not say "based on our methodology" or any similar phrase
-- Frame supermarket access as proximity to fresh, affordable food options
-- Frame grocery density as the availability of grocery stores in the area
-- Frame health outcomes as diet-related health conditions in the community"""
+- Frame impervious surface as pavement and built surfaces that absorb and radiate heat
+- Frame tree canopy as natural shade and cooling that protects against extreme heat
+- Frame health outcomes as respiratory conditions (asthma, COPD) worsened by heat and poor air quality"""
 
     # Using Sonnet for cost/speed — 600 interpretation calls at ~$0.01 each vs ~$0.10 for Opus.
-    # Stress pipeline (Tool 3) used the same model. Quality is sufficient for 2-3 sentence summaries.
+    # Stress and Food Access pipelines used the same model. Quality is sufficient for 2-3 sentence summaries.
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
         max_tokens=300,
@@ -879,13 +794,13 @@ failed_interps = []
 for i, (idx, row) in enumerate(df.iterrows()):
     zc = row["zipcode"]
     components = {
-        "Supermarket Proximity": row.get("low_access_normalized", 0),
-        "Grocery Store Availability": row.get("grocery_density_normalized", 0),
-        "Diet-Related Health": row.get("health_outcome_normalized", 0),
+        "Pavement & Built Surface": row.get("impervious_normalized", 0),
+        "Tree Canopy & Shade": row.get("tree_canopy_normalized", 0),
+        "Heat-Sensitive Respiratory Health": row.get("health_outcome_normalized", 0),
     }
 
     try:
-        interp = generate_food_interpretation(
+        interp = generate_heat_interpretation(
             zc, row["composite_score"], row["letter_grade"], components
         )
         interpretations[zc] = interp
@@ -918,7 +833,7 @@ else:
 # %%
 # ── Reinitialize Supabase client (fresh HTTP connection) ─────
 # PostgREST may have a stale schema cache from earlier in the pipeline,
-# especially if food_access_scores was recently created. A fresh client
+# especially if heat_scores was recently created. A fresh client
 # forces a new HTTP connection to avoid PGRST205 errors.
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 log("INFO", "Reinitialized Supabase client for upsert phase")
@@ -930,7 +845,7 @@ RETRY_DELAY = 3
 
 for attempt in range(1, MAX_RETRIES + 1):
     try:
-        test = supabase.table("food_access_scores").select("zipcode").limit(1).execute()
+        test = supabase.table("heat_scores").select("zipcode").limit(1).execute()
         log("PASS", f"Schema cache warm-up succeeded on attempt {attempt}")
         break
     except Exception as e:
@@ -940,7 +855,7 @@ for attempt in range(1, MAX_RETRIES + 1):
 else:
     raise RuntimeError(
         "\n" + "!" * 62 + "\n"
-        "  PostgREST cannot see the food_access_scores table after 5 attempts.\n"
+        "  PostgREST cannot see the heat_scores table after 5 attempts.\n"
         "  This is a schema cache issue, not a missing table.\n\n"
         "  FIX: Open Supabase SQL Editor and run:\n"
         "    NOTIFY pgrst, 'reload schema';\n\n"
@@ -949,7 +864,7 @@ else:
     )
 
 # %%
-log("START", "Upserting all records to food_access_scores")
+log("START", "Upserting all records to heat_scores")
 
 failed_zips = []
 
@@ -957,10 +872,10 @@ for _, row in df.iterrows():
     record = {
         "zipcode": row["zipcode"],
         "metro": row["metro"],
-        "low_access_raw": float(row["low_access_raw"]) if pd.notna(row["low_access_raw"]) else None,
-        "low_access_normalized": float(row["low_access_normalized"]) if pd.notna(row["low_access_normalized"]) else None,
-        "grocery_density_raw": float(row["grocery_density_raw"]) if pd.notna(row["grocery_density_raw"]) else None,
-        "grocery_density_normalized": float(row["grocery_density_normalized"]) if pd.notna(row["grocery_density_normalized"]) else None,
+        "impervious_raw": float(row["impervious_raw"]) if pd.notna(row["impervious_raw"]) else None,
+        "impervious_normalized": float(row["impervious_normalized"]) if pd.notna(row["impervious_normalized"]) else None,
+        "tree_canopy_raw": float(row["tree_canopy_raw"]) if pd.notna(row["tree_canopy_raw"]) else None,
+        "tree_canopy_normalized": float(row["tree_canopy_normalized"]) if pd.notna(row["tree_canopy_normalized"]) else None,
         "health_outcome_raw": float(row["health_outcome_raw"]) if pd.notna(row["health_outcome_raw"]) else None,
         "health_outcome_normalized": float(row["health_outcome_normalized"]) if pd.notna(row["health_outcome_normalized"]) else None,
         "composite_score": float(row["composite_score"]),
@@ -970,7 +885,7 @@ for _, row in df.iterrows():
     }
 
     try:
-        supabase.table("food_access_scores").upsert(
+        supabase.table("heat_scores").upsert(
             record, on_conflict="zipcode"
         ).execute()
     except Exception as e:
@@ -980,7 +895,7 @@ for _, row in df.iterrows():
 if failed_zips:
     log("WARN", f"{len(failed_zips)} ZIPs failed upsert: {failed_zips[:10]}")
 else:
-    log("PASS", "All records upserted to food_access_scores")
+    log("PASS", "All records upserted to heat_scores")
 
 # %% [markdown]
 # ## 9a · Supabase Write Tests (Suite 4) — GATE
@@ -988,7 +903,7 @@ else:
 # %%
 log("TEST", "Running Suite 4 — Supabase Write Tests")
 
-TABLE_NAME = "food_access_scores"
+TABLE_NAME = "heat_scores"
 
 def get_sb_count():
     result = supabase.table(TABLE_NAME).select("zipcode", count="exact").execute()
@@ -1047,17 +962,17 @@ for zc in SPOT_ZIPS:
             )
         ))
 
-suite4_passed = run_tests("FOOD ACCESS — SUPABASE WRITE", write_tests)
-require_all_pass("FOOD ACCESS — SUPABASE WRITE", suite4_passed)
+suite4_passed = run_tests("HEAT & CLIMATE RESILIENCE — SUPABASE WRITE", write_tests)
+require_all_pass("HEAT & CLIMATE RESILIENCE — SUPABASE WRITE", suite4_passed)
 
 
 # %% [markdown]
 # ## 10 · Pipeline Complete
 #
-# All 4 test suites passed. Data is live in `food_access_scores`.
+# All 4 test suites passed. Data is live in `heat_scores`.
 
 # %%
-log("DONE", f"Food Access pipeline complete — {len(df)} ZIPs scored and written to Supabase")
+log("DONE", f"Heat & Climate Resilience pipeline complete — {len(df)} ZIPs scored and written to Supabase")
 log("INFO", f"Grade distribution: {df['letter_grade'].value_counts().to_dict()}")
 log("INFO", f"Mean composite score: {df['composite_score'].mean():.2f}")
 log("INFO", f"Score range: {df['composite_score'].min():.2f} – {df['composite_score'].max():.2f}")

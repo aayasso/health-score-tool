@@ -618,6 +618,42 @@ def fetch_heat_metro_peers(metro: str, limit: int = 15):
     return all_scores[:limit]
 
 
+# ── OVERALL SCORE HELPER ─────────────────────────────────────
+@st.cache_data(ttl=3600)
+def fetch_overall_score(zipcode: str):
+    r = supabase.table("overall_scores")\
+        .select("composite_score,letter_grade")\
+        .eq("zipcode", zipcode)\
+        .limit(1).execute()
+    return r.data[0] if r.data else None
+
+OVERALL_GRADE_COLORS = {
+    "A": "#1A6B3C", "B": "#3A8C5C", "C": "#B87A1A", "D": "#C05020", "F": "#A01818"
+}
+
+def render_overall_card(zipcode: str):
+    overall = fetch_overall_score(zipcode)
+    if overall:
+        ov_score = overall["composite_score"]
+        ov_grade = overall["letter_grade"]
+        ov_color = OVERALL_GRADE_COLORS.get(ov_grade, "#444")
+        st.markdown(f'''
+        <div class="card" style="padding:16px 22px;display:flex;align-items:center;gap:16px;">
+          <div style="font-size:1.6rem;font-weight:700;color:{ov_color};font-family:'DM Serif Display',serif;">
+            {ov_score:.0f}
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:0.82rem;color:#AAAAAA;text-transform:uppercase;letter-spacing:0.05em;">
+              Overall Health Score
+            </div>
+            <div style="font-size:0.95rem;font-weight:600;color:{ov_color};">
+              Grade {ov_grade}
+            </div>
+          </div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+
 # ── SINGLE DISC SVG ───────────────────────────────────────────
 def make_disc_svg(component_scores: dict, composite: float, grade: str,
                   comp_config: dict = None, grade_info: dict = None) -> str:
@@ -748,6 +784,8 @@ with tab_resp:
             metro_title = metro.title() if metro else ""
 
             grade_color, grade_label, grade_desc = GRADE_INFO.get(grade, ("#444", "Unknown", ""))
+
+            render_overall_card(zipcode_r)
 
             # Score card
             st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -933,6 +971,8 @@ with tab_cv:
             cv_grade_color, cv_grade_label, cv_grade_desc = CV_GRADE_INFO.get(
                 cv_grade, ("#444", "Unknown", "")
             )
+
+            render_overall_card(zipcode_cv)
 
             # Score card
             st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -1121,6 +1161,8 @@ with tab_stress:
                 st_grade, ("#444", "Unknown", "")
             )
 
+            render_overall_card(zipcode_st)
+
             # Score card
             st.markdown('<div class="card">', unsafe_allow_html=True)
             col_disc_st, col_info_st = st.columns([1, 1.25], gap="medium")
@@ -1307,6 +1349,8 @@ with tab_fa:
                 fa_grade, ("#444", "Unknown", "")
             )
 
+            render_overall_card(zipcode_fa)
+
             # Score card
             st.markdown('<div class="card">', unsafe_allow_html=True)
             col_disc_fa, col_info_fa = st.columns([1, 1.25], gap="medium")
@@ -1492,6 +1536,8 @@ with tab_heat:
             ht_grade_color, ht_grade_label, ht_grade_desc = HEAT_GRADE_INFO.get(
                 ht_grade, ("#444", "Unknown", "")
             )
+
+            render_overall_card(zipcode_ht)
 
             # Score card
             st.markdown('<div class="card">', unsafe_allow_html=True)

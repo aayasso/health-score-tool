@@ -25,7 +25,7 @@ import requests
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-from datetime import datetime
+from datetime import datetime, date
 
 # Colab secrets — uncomment in Colab
 # from google.colab import userdata
@@ -895,6 +895,7 @@ for _, row in df.iterrows():
         "composite_score": float(row["composite_score"]),
         "letter_grade": row["letter_grade"],
         "interpretation": row.get("interpretation", ""),
+        "score_date": str(date.today()),
     }
 
     try:
