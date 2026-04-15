@@ -223,6 +223,21 @@ details > div {
     color: #8B3A2A;
     font-size: 0.9rem;
 }
+
+/* Tab labels */
+.stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
+    font-family: 'DM Sans', sans-serif !important;
+    font-size: 0.95rem !important;
+    font-weight: 500 !important;
+    color: #1A1A1A !important;
+}
+.stTabs [data-baseweb="tab-list"] button[aria-selected="true"] [data-testid="stMarkdownContainer"] p {
+    font-weight: 600 !important;
+    color: #1A1A1A !important;
+}
+.stTabs [data-baseweb="tab-highlight"] {
+    background-color: #3A7D54 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
