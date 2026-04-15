@@ -6,9 +6,30 @@
 
 ## Who You Are Working With
 
-You are building **The Health Environment Score** for **LaSalle Technologies** — a five-tool neighborhood-level health environment scoring platform covering 574 ZIP codes across Pittsburgh, Los Angeles, Phoenix, and Charlotte. All 5 tools are complete and live. The platform is now transitioning from Streamlit to Lovable (React + Supabase REST API).
+You are building **The Health Environment Score** for **LaSalle Technologies** — a neighborhood-level measurement of the environmental conditions that shape long-term health outcomes, across five dimensions: respiratory, cardiovascular, stress/sensory, food access, and heat & climate resilience. All 5 tools are complete and live across 574 ZIP codes in Pittsburgh, Los Angeles, Phoenix, and Charlotte. The platform is now transitioning from Streamlit to Lovable (React + Supabase REST API).
 
-The platform is built on a **"public score, private engine"** model. Scores and letter grades are public. Methodology, weights, and normalization logic are proprietary. This distinction governs every file, comment, log, and UI element you touch.
+### Business Model: "Public Score, Private Engine"
+
+**PUBLIC** — safe to expose in UI, README, any output:
+- The scores themselves (composite score 0–100, letter grade A–F)
+- The five component factors and their general qualitative descriptions
+- Letter grades and what they mean (A ≥ 80, B 65–79, C 50–64, D 35–49, F < 35)
+- All federal data sources used: CDC PLACES, BTS, NLCD, USDA, NASA VIIRS, EPA AQS, EPA EJScreen
+
+**PROPRIETARY** — never expose in any file, UI, log, comment, or output:
+- Exact component weights and normalization methodology
+- Algorithmic decisions (null handling, outlier treatment, cross-metro calibration)
+- The Claude API interpretation layer (prompt templates, model configuration)
+- The composite multi-tool scoring logic (how overall_scores are derived)
+- The `score_config` table contents
+
+This distinction governs every file, comment, log, and UI element you touch.
+
+### Positioning
+Multi-dimensional (5 interlocking factors), ZIP-level specificity, federally-sourced (not proprietary or survey-based), interpretable (plain-language Claude layer). Walk Score measures built environment opportunity — this measures health environment *outcomes*. The divergence between the two is analytically valuable.
+
+### Go-to-Market Strategy
+Public scores, proprietary methodology. Become the expected standard before monetizing. Walk Score / GreatSchools model — become indispensable to platforms, not pitch to them.
 
 ---
 

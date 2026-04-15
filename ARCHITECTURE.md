@@ -67,8 +67,9 @@ FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 ---
 
-## Streamlit Architecture
+## Frontend Architecture
 
+### Streamlit (Current)
 - Single `app.py` entry point with tab-based navigation
 - Each tool is a self-contained module in `streamlit/tabs/`
 - Shared components in `streamlit/components/`:
@@ -76,6 +77,15 @@ FOR EACH ROW EXECUTE FUNCTION update_updated_at();
   - `interpretation.py` — Claude API call wrapper with caching
 - All Supabase queries go through `utils/supabase_client.py`
 - No raw SQL in tab files — use the client utility
+
+### Lovable / React (Next)
+- Target: replace Streamlit with React components at `lasalletech.ai`
+- **Architecture:** Lovable → Supabase REST API (anon key) → score tables
+- No middleware or backend proxy needed — Supabase auto-exposes REST endpoints per table
+- All data is pre-computed and stored; frontend is purely a read layer
+- Disc SVG visualization must be rebuilt in React/JavaScript
+- Must maintain exact same component configs, colors, and grade scales as current `app.py`
+- Must maintain public/proprietary boundary — no weights or methodology in frontend code
 
 ---
 
@@ -152,8 +162,10 @@ Current scope: 574 ZIPs scored, 4 metros, all 5 tools complete.
 Design decisions made with future scale in mind:
 - Upsert pattern supports expanding to new ZIPs without schema changes
 - Per-tool tables support adding new tools without restructuring
-- Global normalization will need recalibration when new metros are added (document this)
+- Global normalization will need recalibration when new metros are added (document any recalibration)
 - Claude API interpretations are generated once and stored — not called on every user request
+- `score_date` column on all tables enables longitudinal tracking — annual refreshes planned
+- Validation against actual health outcomes (hospital admissions, chronic disease prevalence) is a planned future study
 
 ---
 

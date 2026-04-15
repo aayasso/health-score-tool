@@ -52,20 +52,25 @@
 ## Strategic Context (for generating any public-facing content)
 
 **What this platform is:**
-A neighborhood-level health environment scoring system measuring the environmental conditions that shape long-term health outcomes — across five dimensions: respiratory, cardiovascular, stress/sensory, food access, and heat/climate resilience.
+The Health Environment Score — a neighborhood-level measurement of the environmental conditions that shape long-term health outcomes, across five dimensions: respiratory, cardiovascular, stress/sensory, food access, and heat & climate resilience.
 
 **What makes it different:**
-- Measures health *outcomes* (not just built environment opportunity like Walk Score)
+- Measures health environment *outcomes* (not just built environment opportunity like Walk Score)
 - Multi-dimensional (5 interlocking scores, not a single metric)
 - ZIP-level specificity across four major metros
-- All inputs from authoritative federal sources (CDC, USDA, NASA, USGS, BTS, EPA)
-- Plain-language interpretations via Claude API
+- All inputs from authoritative federal sources (CDC PLACES, BTS, NLCD, USDA, NASA VIIRS, EPA AQS, EPA EJScreen)
+- Plain-language interpretations via Claude API — neighborhood health narrative, not raw numbers
 
-**Target audiences:**
-- Researchers / academics
-- Real estate developers and relocation professionals
-- Healthcare systems and insurers
-- City planners and policy organizations
+**Positioning vs. Walk Score:**
+Walk Score measures built environment opportunity. This measures health environment outcomes. The divergence between the two is analytically valuable — a neighborhood can have high walkability but poor air quality, or vice versa.
+
+**Target audiences & CTAs:**
+| Audience | CTA |
+|---|---|
+| Researchers / academics | Cite this tool, request methodology documentation |
+| Healthcare systems / insurers | Bulk data or API access |
+| Real estate / relocation professionals | ZIP lookup tool |
+| City planners / policy organizations | Neighborhood briefing |
 
 **Partnership targets:**
 - Atrium Health, Novant (Charlotte)
@@ -73,11 +78,16 @@ A neighborhood-level health environment scoring system measuring the environment
 - Heinz Endowments (Pittsburgh)
 - Bloomberg Philanthropies
 
-**Go-to-market timing:**
-- All 5 tools complete as of April 2026
+**Long-term moat:**
+- **Longitudinal data** — scores dated with `score_date`, annual refreshes planned
+- **Validation against actual health outcomes** (hospital admissions, chronic disease prevalence) = publishable study
+- **Claude interpretation layer** — plain-language neighborhood health narrative is hard to replicate at scale
+- **Go-to-market:** public scores, proprietary methodology. Become the expected standard before monetizing. Walk Score / GreatSchools model — become indispensable to platforms, not pitch to them.
+
+**Current deployment:**
 - Streamlit app live: `health-score-tool-gnoxoobgjrakzvwnj4ktec.streamlit.app`
 - LaSalle Technologies site: `lasalletech.ai` (built in Lovable)
-- Next: migrate scoring UI from Streamlit into Lovable site using Supabase REST API
+- Next: migrate scoring UI from Streamlit into Lovable site using Supabase REST API (project ref: `hakiksjnpipgstomzzjy`)
 
 ---
 
@@ -400,10 +410,12 @@ A neighborhood-level health environment scoring system measuring the environment
 ## Environment & Credentials
 
 - **Supabase URL:** stored as `SUPABASE_URL` in Colab secrets
-- **Supabase Key:** stored as `SUPABASE_KEY` in Colab secrets  
+- **Supabase Key:** stored as `SUPABASE_KEY` in Colab secrets
+- **Supabase project ref:** `hakiksjnpipgstomzzjy`
 - **Claude API Key:** stored as `ANTHROPIC_API_KEY` in Colab secrets
 - **GitHub repo:** `health-score-tool`
-- **Streamlit app:** deployed on Streamlit Community Cloud (linked to GitHub repo)
+- **Streamlit app:** `health-score-tool-gnoxoobgjrakzvwnj4ktec.streamlit.app` (deployed on Streamlit Community Cloud, linked to GitHub repo)
+- **LaSalle site:** `lasalletech.ai` (built in Lovable)
 
 ---
 
