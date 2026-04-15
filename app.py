@@ -476,6 +476,39 @@ FA_GRADE_INFO = {
     "F": ("#A01818", "Very Poor",  "This neighborhood faces significant food access challenges. Fresh food options are limited and diet-related health conditions are well above average."),
 }
 
+# ── HEAT & CLIMATE RESILIENCE CONSTANTS ──────────────────────
+HEAT_COMPONENT_CONFIG = {
+    "tree_canopy": {
+        "label":   "Tree Canopy & Shade",
+        "color":   "#E85D04",
+        "weight":  35,
+        "sublabel": "Overhead tree coverage",
+        "explain": "Captures the percentage of the neighborhood shaded by tree canopy. Trees provide direct shade, cool the air through evapotranspiration, and are the single most effective natural defense against urban heat. Higher scores mean more tree cover and natural cooling.",
+    },
+    "impervious": {
+        "label":   "Pavement & Built Surface",
+        "color":   "#F48C06",
+        "weight":  30,
+        "sublabel": "Impervious surface coverage",
+        "explain": "Reflects the share of the neighborhood covered by roads, parking lots, rooftops, and other surfaces that absorb heat during the day and radiate it at night. More pavement means hotter conditions and less natural cooling. Higher scores mean more natural ground cover.",
+    },
+    "health_outcome": {
+        "label":   "Heat-Sensitive Health",
+        "color":   "#FFBA08",
+        "weight":  35,
+        "sublabel": "Asthma & COPD prevalence",
+        "explain": "Captures the combined prevalence of asthma and COPD among residents — respiratory conditions that are directly worsened by heat exposure and poor air quality common in neighborhoods with extensive pavement and sparse tree cover. Higher scores indicate lower rates of heat-sensitive respiratory disease.",
+    },
+}
+
+HEAT_GRADE_INFO = {
+    "A": ("#E85D04", "Excellent",  "This neighborhood has strong heat resilience — ample tree canopy, limited pavement, and low rates of heat-sensitive respiratory conditions make it well-protected against extreme heat."),
+    "B": ("#F48C06", "Good",       "Heat resilience here is above average. Good tree coverage, moderate built surface, and favorable respiratory health indicators support well-being during heat events."),
+    "C": ("#B87A1A", "Fair",       "Moderate heat resilience — some protective factors like tree canopy are present, but pavement coverage or respiratory health concerns may increase vulnerability during summer peaks."),
+    "D": ("#C05020", "Poor",       "Limited heat resilience in this neighborhood. High pavement coverage, sparse tree canopy, or elevated respiratory health concerns increase vulnerability to extreme heat."),
+    "F": ("#A01818", "Very Poor",  "This neighborhood faces significant heat vulnerability. Extensive pavement, minimal tree cover, and high rates of heat-sensitive respiratory conditions create compounding risks during heat waves."),
+}
+
 
 # ── STRESS DATA HELPERS ──────────────────────────────────────
 @st.cache_data(ttl=3600)
@@ -531,6 +564,37 @@ def fetch_fa_metro_peers(metro: str, limit: int = 15):
     for i in range(0, len(metro_zips), batch_size):
         batch = metro_zips[i:i + batch_size]
         resp = supabase.table("food_access_scores")\
+            .select("zipcode,composite_score,letter_grade")\
+            .in_("zipcode", batch)\
+            .execute()
+        all_scores.extend(resp.data)
+    all_scores.sort(key=lambda x: x["composite_score"], reverse=True)
+    return all_scores[:limit]
+
+
+# ── HEAT DATA HELPERS ─────────────────────────────────────────
+@st.cache_data(ttl=3600)
+def fetch_heat_score(zipcode: str):
+    r = supabase.table("heat_scores")\
+        .select("*")\
+        .eq("zipcode", zipcode)\
+        .limit(1).execute()
+    return r.data[0] if r.data else None
+
+@st.cache_data(ttl=3600)
+def fetch_heat_metro_peers(metro: str, limit: int = 15):
+    zips_resp = supabase.table("zip_codes")\
+        .select("zipcode")\
+        .eq("metro", metro)\
+        .execute()
+    if not zips_resp.data:
+        return []
+    metro_zips = [r["zipcode"] for r in zips_resp.data]
+    all_scores = []
+    batch_size = 50
+    for i in range(0, len(metro_zips), batch_size):
+        batch = metro_zips[i:i + batch_size]
+        resp = supabase.table("heat_scores")\
             .select("zipcode,composite_score,letter_grade")\
             .in_("zipcode", batch)\
             .execute()
@@ -625,7 +689,7 @@ def clean_interp(text: str) -> str:
 st.markdown('<div class="app-title">🏥 Health Environment Score</div>', unsafe_allow_html=True)
 st.markdown('<div class="app-sub">Neighborhood-level health environment intelligence</div>', unsafe_allow_html=True)
 
-tab_resp, tab_cv, tab_stress, tab_fa = st.tabs(["🌿 Respiratory", "❤️ Cardiovascular", "🧠 Stress / Sensory", "🥦 Food Access"])
+tab_resp, tab_cv, tab_stress, tab_fa, tab_heat = st.tabs(["🌿 Respiratory", "❤️ Cardiovascular", "🧠 Stress / Sensory", "🥦 Food Access", "🌡️ Heat & Climate"])
 
 # ═══════════════════════════════════════════════════════════════
 # TAB 1 — RESPIRATORY
@@ -1353,6 +1417,192 @@ with tab_fa:
                             g_color = FA_GRADE_INFO.get(g, ("#888",))[0]
                             bold    = "font-weight:700;" if z == zipcode_fa else ""
                             hi      = "background:#EEF5E6;border-radius:8px;padding:2px 6px;" if z == zipcode_fa else ""
+
+                            st.markdown(f"""
+                            <div class="metro-row" style="{hi}">
+                              <div class="metro-zip" style="{bold}">{z}</div>
+                              <div class="metro-bar-wrap">
+                                <div class="metro-bar" style="width:{bar_pct}%;background:{g_color};"></div>
+                              </div>
+                              <div class="metro-score">{s:.0f}</div>
+                              <div class="metro-grade" style="color:{g_color};">{g}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════
+# TAB 5 — HEAT & CLIMATE RESILIENCE
+# ═══════════════════════════════════════════════════════════════
+with tab_heat:
+    zip_input_ht = st.text_input(
+        "", placeholder="Enter a ZIP code  (e.g. 15213, 90210, 28277, 85281)",
+        label_visibility="collapsed",
+        key="zip_heat",
+    )
+
+    if not zip_input_ht:
+        st.markdown("""
+        <div class="info-box" style="background:#FEF3E2;color:#7C3A00;">
+        Enter any ZIP code in <strong>Pittsburgh, Los Angeles, Phoenix, or Charlotte</strong>
+        to see its Heat &amp; Climate Resilience Score — powered by USGS, NLCD, and environmental data.
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        zipcode_ht = zip_input_ht.strip().zfill(5)
+
+        with st.spinner("Loading…"):
+            ht_data   = fetch_heat_score(zipcode_ht)
+            zip_meta  = fetch_zip_meta(zipcode_ht)
+
+        if not ht_data:
+            st.markdown(f"""
+            <div class="error-box">
+            No heat resilience data found for ZIP code <strong>{zipcode_ht}</strong>.
+            This MVP covers Pittsburgh, Los Angeles, Phoenix, and Charlotte.
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            ht_composite = ht_data["composite_score"]
+            ht_grade     = ht_data["letter_grade"]
+            ht_metro     = (zip_meta.get("metro") if zip_meta else "") or ""
+            ht_metro_t   = ht_metro.title() if ht_metro else ""
+
+            # Build component scores dict for the disc visualization
+            ht_comp_scores = {
+                "impervious":      ht_data.get("impervious_normalized") or 0,
+                "tree_canopy":     ht_data.get("tree_canopy_normalized") or 0,
+                "health_outcome":  ht_data.get("health_outcome_normalized") or 0,
+            }
+
+            ht_grade_color, ht_grade_label, ht_grade_desc = HEAT_GRADE_INFO.get(
+                ht_grade, ("#444", "Unknown", "")
+            )
+
+            # Score card
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            col_disc_ht, col_info_ht = st.columns([1, 1.25], gap="medium")
+
+            with col_disc_ht:
+                st.markdown(
+                    make_disc_svg(ht_comp_scores, ht_composite, ht_grade,
+                                  comp_config=HEAT_COMPONENT_CONFIG, grade_info=HEAT_GRADE_INFO),
+                    unsafe_allow_html=True
+                )
+
+            with col_info_ht:
+                ht_metro_tag = f" &middot; {ht_metro_t}" if ht_metro_t else ""
+                st.markdown(f"""
+                <div style="padding-top:12px;">
+                  <div style="font-size:0.78rem;color:#AAAAAA;text-transform:uppercase;
+                              letter-spacing:0.07em;margin-bottom:6px;">
+                    ZIP {zipcode_ht}{ht_metro_tag}
+                  </div>
+                  <div style="font-family:'DM Serif Display',serif;font-size:1.9rem;
+                              color:{ht_grade_color};line-height:1.1;margin-bottom:8px;">
+                    {ht_grade_label}
+                  </div>
+                  <div style="font-size:0.88rem;color:#555;line-height:1.65;margin-bottom:12px;">
+                    {ht_grade_desc}
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # Component breakdown
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown('<div class="section-header">Score Breakdown</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-sub">Three weighted factors combine to form the overall score</div>', unsafe_allow_html=True)
+
+            for key, cfg in HEAT_COMPONENT_CONFIG.items():
+                raw = ht_comp_scores.get(key)
+                wt  = cfg["weight"]
+                if raw is not None and raw > 0:
+                    score_str = f"{raw * wt / 100:.0f}/{wt}"
+                else:
+                    score_str = "—"
+
+                st.markdown(f"""
+                <div class="comp-row">
+                  <div class="comp-dot" style="background:{cfg['color']};"></div>
+                  <div class="comp-info">
+                    <div class="comp-label">{cfg['label']}</div>
+                    <div class="comp-sub">{cfg['sublabel']}</div>
+                  </div>
+                  <div class="comp-score">{score_str}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # Interpretation
+            ht_interp = ht_data.get("interpretation", "")
+            if ht_interp:
+                clean_ht = clean_interp(ht_interp)
+                if clean_ht:
+                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    st.markdown('<div class="section-header">About This ZIP Code</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="interp-text">{clean_ht}</div>', unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+            # How it's calculated
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown('<div class="section-header">How the Score Is Calculated</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-sub">Tap any factor to learn more</div>', unsafe_allow_html=True)
+
+            for key, cfg in HEAT_COMPONENT_CONFIG.items():
+                st.markdown(f"""
+                <details>
+                  <summary>
+                    <span style="display:inline-block;width:9px;height:9px;border-radius:50%;
+                          background:{cfg['color']};flex-shrink:0;"></span>
+                    <strong>{cfg['label']}</strong>
+                    <span style="color:#AAAAAA;font-weight:400;font-size:0.82rem;margin-left:4px;">
+                      · {cfg['weight']}% of total
+                    </span>
+                  </summary>
+                  <div>{cfg['explain']}</div>
+                </details>
+                """, unsafe_allow_html=True)
+
+            st.markdown("""
+            <details>
+              <summary>
+                <strong>Grade Scale</strong>
+              </summary>
+              <div style="line-height:2.1;">
+                <span style="color:#E85D04;font-weight:700;">A (≥ 80)</span> — Excellent heat resilience<br>
+                <span style="color:#F48C06;font-weight:700;">B (65–79)</span>  — Above average climate resilience<br>
+                <span style="color:#B87A1A;font-weight:700;">C (50–64)</span>  — Moderate conditions; some heat vulnerability<br>
+                <span style="color:#C05020;font-weight:700;">D (35–49)</span>  — Limited heat resilience; elevated risk<br>
+                <span style="color:#A01818;font-weight:700;">F (< 35)</span>   — Significant heat vulnerability
+              </div>
+            </details>
+            """, unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # Metro comparison
+            if ht_metro:
+                with st.expander(f"📊  Compare to other ZIP codes in {ht_metro_t}"):
+                    with st.spinner("Loading metro data…"):
+                        ht_peers = fetch_heat_metro_peers(ht_metro, limit=15)
+
+                    if not ht_peers:
+                        st.markdown(
+                            '<div style="color:#AAA;font-size:0.88rem;padding:8px 0;">No peer data available.</div>',
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        ht_max_score = max(p["composite_score"] for p in ht_peers)
+                        for p in ht_peers:
+                            z       = p["zipcode"]
+                            s       = p["composite_score"]
+                            g       = p["letter_grade"]
+                            bar_pct = int((s / ht_max_score) * 100) if ht_max_score else 0
+                            g_color = HEAT_GRADE_INFO.get(g, ("#888",))[0]
+                            bold    = "font-weight:700;" if z == zipcode_ht else ""
+                            hi      = "background:#FEF3E2;border-radius:8px;padding:2px 6px;" if z == zipcode_ht else ""
 
                             st.markdown(f"""
                             <div class="metro-row" style="{hi}">
