@@ -332,23 +332,19 @@ from rasterstats import zonal_stats
 import os
 
 # ── Paths (update these in Colab) ────────────────────────────
-# Original 4 states (PA, CA, AZ, NC) use clipped per-state rasters already on Drive.
-# New 4 states (IL, TX, GA, CO) use the CONUS-wide raster downloaded via expansion_prep.py.
-# rasterstats handles windowed reads so CONUS raster won't crash RAM.
+# All 8 states use clipped per-state rasters on Drive.
 # Each state's ZIPs are processed separately via STATE_METRO_MAP below.
 DRIVE_PREFIX = "/content/drive/MyDrive/Colab Notebooks/health-score-data"
-
-CONUS_NOISE_RASTER = f"{DRIVE_PREFIX}/CONUS_rail_road_and_aviation_noise_2020.tif"
 
 STATE_NOISE_RASTERS = {
     "PA": f"{DRIVE_PREFIX}/PA_rail_road_and_aviation_noise_2020.tif",
     "CA": f"{DRIVE_PREFIX}/CA_rail_road_and_aviation_noise_2020.tif",
     "AZ": f"{DRIVE_PREFIX}/AZ_rail_road_and_aviation_noise_2020.tif",
     "NC": f"{DRIVE_PREFIX}/NC_rail_road_and_aviation_noise_2020.tif",
-    "IL": CONUS_NOISE_RASTER,
-    "TX": CONUS_NOISE_RASTER,
-    "GA": CONUS_NOISE_RASTER,
-    "CO": CONUS_NOISE_RASTER,
+    "IL": f"{DRIVE_PREFIX}/IL_rail_road_and_aviation_noise_2020.tif",
+    "TX": f"{DRIVE_PREFIX}/TX_rail_road_and_aviation_noise_2020.tif",
+    "GA": f"{DRIVE_PREFIX}/GA_rail_road_and_aviation_noise_2020.tif",
+    "CO": f"{DRIVE_PREFIX}/CO_rail_road_and_aviation_noise_2020.tif",
 }
 
 # Map each state to the metros whose ZIPs fall within that state's raster
@@ -377,7 +373,7 @@ if not noise_already_done:
     # ── Process each state raster separately to avoid RAM crashes ─
     # Instead of merging 4 large rasters, we run zonal_stats per state
     # on only the ZIPs belonging to that state's metros.
-    log("INFO", "  Processing noise rasters per state (8 states, CONUS raster for IL/TX/GA/CO)...")
+    log("INFO", "  Processing noise rasters per state (8 per-state rasters)...")
     noise_parts = []
 
     for state, raster_path in STATE_NOISE_RASTERS.items():

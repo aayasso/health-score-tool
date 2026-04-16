@@ -87,7 +87,7 @@ VALID_GRADES = {"A", "B", "C", "D", "F"}
 # Table configurations
 # Each entry: (table_name, grade_column, dimension_filter_or_None)
 TABLE_CONFIGS = [
-    ("composite_scores",       "score_grade",  "respiratory"),
+    ("respiratory_scores",     "letter_grade",  None),
     ("cardiovascular_scores",  "letter_grade",  None),
     ("stress_scores",          "letter_grade",  None),
     ("food_access_scores",     "letter_grade",  None),
@@ -96,7 +96,7 @@ TABLE_CONFIGS = [
 ]
 
 TOOL_LABELS = {
-    "composite_scores":       "Respiratory",
+    "respiratory_scores":     "Respiratory",
     "cardiovascular_scores":  "Cardiovascular",
     "stress_scores":          "Stress",
     "food_access_scores":     "Food Access",
@@ -234,7 +234,7 @@ log("START", "Cross-table consistency checks for 4 test ZIPs")
 
 # Tool tables (excluding overall)
 TOOL_TABLES = [
-    ("composite_scores",       "score_grade",  "respiratory"),
+    ("respiratory_scores",     "letter_grade",  None),
     ("cardiovascular_scores",  "letter_grade",  None),
     ("stress_scores",          "letter_grade",  None),
     ("food_access_scores",     "letter_grade",  None),
@@ -256,11 +256,7 @@ for zc in TEST_ZIPS:
         if row:
             scores[t_label] = float(row["composite_score"]) if row.get("composite_score") is not None else None
             grades[t_label] = row.get(t_grade_col)
-            if t_table == "composite_scores":
-                zip_meta = get_row("zip_codes", zc)
-                metros[t_label] = zip_meta.get("metro") if zip_meta else None
-            else:
-                metros[t_label] = row.get("metro")
+            metros[t_label] = row.get("metro")
 
     # Check 1: All 5 tool scores exist
     cross_tests.append((
@@ -335,9 +331,7 @@ metro_tests = []
 for table, grade_col, dim_filter in TABLE_CONFIGS:
     label = TOOL_LABELS[table]
 
-    # composite_scores has no metro column — skip metro distribution for it
-    if table == "composite_scores":
-        continue
+    # All tool tables now have a metro column — no special cases needed
 
     for metro in sorted(EXPECTED_METROS):
         metro_tests.append((

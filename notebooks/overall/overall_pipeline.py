@@ -102,7 +102,7 @@ log("INFO", f"Fetched {len(df_zips)} ZIPs across {df_zips['metro'].nunique()} me
 log("START", "Pulling composite_score from all 5 tool tables")
 
 SOURCE_TABLES = {
-    "respiratory_score": ("composite_scores", "score_dimension", "respiratory"),
+    "respiratory_score": ("respiratory_scores", None, None),
     "cardiovascular_score": ("cardiovascular_scores", None, None),
     "stress_score": ("stress_scores", None, None),
     "food_access_score": ("food_access_scores", None, None),

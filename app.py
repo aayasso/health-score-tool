@@ -255,21 +255,33 @@ supabase = get_supabase()
 # ── DATA HELPERS ──────────────────────────────────────────────
 @st.cache_data(ttl=3600)
 def fetch_score(zipcode: str):
-    r = supabase.table("composite_scores")\
+    r = supabase.table("respiratory_scores")\
         .select("*")\
         .eq("zipcode", zipcode)\
-        .eq("score_dimension", "respiratory")\
         .limit(1).execute()
-    return r.data[0] if r.data else None
+    if not r.data:
+        return None
+    row = r.data[0]
+    # Build component_scores dict and map column names for UI compatibility
+    row["score_grade"] = row.get("letter_grade")
+    row["component_scores"] = {
+        "air_quality": row.get("air_quality_normalized"),
+        "environmental_burden": row.get("environmental_burden_normalized"),
+        "green_cover": row.get("green_cover_normalized"),
+        "health_outcomes": row.get("health_outcomes_normalized"),
+    }
+    return row
 
 @st.cache_data(ttl=3600)
 def fetch_interpretation(zipcode: str):
-    r = supabase.table("interpretations")\
-        .select("interpretation_text,key_strengths,key_concerns")\
+    r = supabase.table("respiratory_scores")\
+        .select("interpretation")\
         .eq("zipcode", zipcode)\
-        .eq("score_dimension", "respiratory")\
         .limit(1).execute()
-    return r.data[0] if r.data else None
+    if not r.data:
+        return None
+    # Map to legacy format expected by UI
+    return {"interpretation_text": r.data[0].get("interpretation", "")}
 
 @st.cache_data(ttl=3600)
 def fetch_zip_meta(zipcode: str):
@@ -296,11 +308,14 @@ def fetch_metro_peers(metro: str, limit: int = 15):
     batch_size = 50
     for i in range(0, len(metro_zips), batch_size):
         batch = metro_zips[i:i + batch_size]
-        resp = supabase.table("composite_scores")\
-            .select("zipcode,composite_score,score_grade,metro_percentile")\
-            .eq("score_dimension", "respiratory")\
+        resp = supabase.table("respiratory_scores")\
+            .select("zipcode,composite_score,letter_grade")\
             .in_("zipcode", batch)\
             .execute()
+        # Map letter_grade → score_grade for UI compatibility
+        for row in resp.data:
+            row["score_grade"] = row.get("letter_grade")
+            row["metro_percentile"] = None
         all_scores.extend(resp.data)
 
     all_scores.sort(key=lambda x: x["composite_score"], reverse=True)
