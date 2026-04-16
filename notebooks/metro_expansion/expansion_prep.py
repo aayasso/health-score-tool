@@ -147,63 +147,62 @@ else:
 # %% [markdown]
 # ## 2 · Assemble New Metro ZIP Lists
 #
-# Downloads the Census Bureau ZCTA-to-CBSA relationship file directly in Colab
-# (no login required) and filters for the 4 new MSA CBSA codes.
+# Queries the CDC PLACES Socrata API to find ZCTAs in each new metro's ZIP prefix
+# ranges. This confirms every ZIP we insert actually has CDC PLACES data coverage,
+# guaranteeing it can be scored by all 5 pipelines.
 #
-# **CBSA codes (from OMB metropolitan statistical area delineations):**
-# - Chicago-Naperville-Elgin, IL-IN-WI: **16980**
-# - Houston-The Woodlands-Sugar Land, TX: **26420**
-# - Atlanta-Sandy Springs-Alpharetta, GA: **12060**
-# - Denver-Aurora-Lakewood, CO: **19740**
+# **Data source:** CDC PLACES (same API used by all tool pipelines)
+# `https://data.cdc.gov/resource/c7b2-4ecy.json`
 #
-# **Data source:** Census Bureau 2020 ZCTA-to-CBSA Relationship File
-# https://www2.census.gov/geo/docs/maps-data/data/rel2020/zcta520/tab20_zcta520_cbsa20_natl.txt
-# Pipe-delimited, no login needed. Key columns: GEOID_ZCTA5_20 (ZIP), GEOID_CBSA_20 (CBSA code).
+# **ZIP prefix ranges (from USPS 3-digit ZIP code areas):**
+# - Chicago: 606, 607, 608
+# - Houston: 770, 771, 772, 773, 774
+# - Atlanta: 300, 301, 302, 303
+# - Denver: 800, 801, 802, 803, 804
 
 # %%
-log("START", "Assembling ZIP lists for 4 new metros")
+log("START", "Assembling ZIP lists for 4 new metros via CDC PLACES API")
 
-# ── New metro definitions ────────────────────────────────────
-NEW_METROS = {
-    "16980": "Chicago",
-    "26420": "Houston",
-    "12060": "Atlanta",
-    "19740": "Denver",
+# ── Metro definitions: ZIP prefix ranges ─────────────────────
+METRO_ZIP_PREFIXES = {
+    "Chicago": ["606", "607", "608"],
+    "Houston": ["770", "771", "772", "773", "774"],
+    "Atlanta": ["300", "301", "302", "303"],
+    "Denver":  ["800", "801", "802", "803", "804"],
 }
 
-# ── Download Census ZCTA-to-CBSA relationship file ──────────
-CENSUS_URL = "https://www2.census.gov/geo/docs/maps-data/data/rel2020/zcta520/tab20_zcta520_cbsa20_natl.txt"
+# ── Query CDC PLACES for ZCTAs matching each prefix ──────────
+# Same API endpoint used by all tool pipelines (cardiovascular, stress, food, heat)
+CDC_BASE_URL = "https://data.cdc.gov/resource/c7b2-4ecy.json"
 
-log("INFO", f"Downloading Census ZCTA-to-CBSA file from {CENSUS_URL}")
-resp = requests.get(CENSUS_URL, timeout=60)
-resp.raise_for_status()
-log("PASS", f"Downloaded ({len(resp.content):,} bytes)")
-
-# ── Parse pipe-delimited file ────────────────────────────────
-from io import StringIO
-
-df_xwalk = pd.read_csv(
-    StringIO(resp.text),
-    sep="|",
-    dtype=str,  # keep all columns as strings to preserve leading zeros
-)
-log("INFO", f"Parsed crosswalk: {len(df_xwalk)} rows, columns: {list(df_xwalk.columns)}")
-
-# Key columns: GEOID_ZCTA5_20 (the 5-digit ZIP/ZCTA) and GEOID_CBSA_20 (the CBSA code)
-if "GEOID_ZCTA5_20" not in df_xwalk.columns or "GEOID_CBSA_20" not in df_xwalk.columns:
-    log("ERROR", f"Expected columns GEOID_ZCTA5_20 and GEOID_CBSA_20, got: {list(df_xwalk.columns)}")
-    raise ValueError("Census relationship file has unexpected column names — check the URL/format")
-
-# ── Filter for new metros ────────────────────────────────────
 new_zip_records = []
 
-for cbsa_code, metro_label in NEW_METROS.items():
-    metro_zips = df_xwalk[df_xwalk["GEOID_CBSA_20"] == cbsa_code]["GEOID_ZCTA5_20"].unique().tolist()
-    # Ensure 5-digit zero-padded
-    metro_zips = [z.zfill(5) for z in metro_zips]
-    log("INFO", f"  {metro_label} (CBSA {cbsa_code}): {len(metro_zips)} ZCTAs found")
+for metro_label, prefixes in METRO_ZIP_PREFIXES.items():
+    metro_zips = set()
 
-    for z in metro_zips:
+    for prefix in prefixes:
+        params = {
+            "$select": "zcta5",
+            "$where": f"zcta5 LIKE '{prefix}%'",
+            "$limit": 50000,
+        }
+        try:
+            api_resp = requests.get(CDC_BASE_URL, params=params, timeout=30)
+            api_resp.raise_for_status()
+            rows = api_resp.json()
+            found_zips = {r["zcta5"].zfill(5) for r in rows if r.get("zcta5")}
+            metro_zips.update(found_zips)
+            log("INFO", f"  {metro_label} prefix {prefix}: {len(found_zips)} ZCTAs from CDC PLACES")
+        except requests.RequestException as e:
+            log("ERROR", f"  {metro_label} prefix {prefix}: API request failed — {e}")
+            raise
+
+        # Brief pause between requests to respect Socrata rate limits
+        time.sleep(0.5)
+
+    log("INFO", f"  {metro_label} total: {len(metro_zips)} unique ZCTAs with CDC PLACES coverage")
+
+    for z in sorted(metro_zips):
         new_zip_records.append({"zipcode": z, "metro": metro_label})
 
 df_new = pd.DataFrame(new_zip_records)
@@ -239,7 +238,7 @@ if len(overlap) > 0:
 
 # ── Summary ──────────────────────────────────────────────────
 log("INFO", "New metro ZIP counts (after dedup):")
-for metro_label in NEW_METROS.values():
+for metro_label in METRO_ZIP_PREFIXES.keys():
     count = len(df_new[df_new["metro"] == metro_label])
     log("INFO", f"  {metro_label}: {count} ZIPs")
 
@@ -258,8 +257,7 @@ log("INFO", f"Expected total after insert: {len(df_existing) + len(df_new)}")
 # - Total after insert: ~1,290 ZIPs
 #
 # If counts are wildly different, STOP and investigate before running the next cell.
-# The HUD crosswalk includes all ZIPs that touch the MSA boundary — some may be
-# rural fringe ZIPs. This is acceptable; pipelines will score whatever is in the table.
+# Every ZIP in this list has confirmed CDC PLACES data, so all are scoreable.
 
 # %% [markdown]
 # ## 3 · Insert New ZIPs into Supabase `zip_codes`
