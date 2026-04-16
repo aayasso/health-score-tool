@@ -7,17 +7,19 @@
 ## Current Status (as of 2026-04-15)
 
 ### Active Phase
-**All 5 tools complete. Transitioning to Lovable frontend.**
+**All 5 tools complete. Pipeline scripts updated for 8-metro expansion (~1,290 ZIPs). Transitioning to Lovable frontend.**
 
 ### What's Complete
-- **All 5 tool pipelines executed** — 574 ZIPs scored across 4 metros (Pittsburgh, Los Angeles, Phoenix, Charlotte)
+- **All 5 tool pipelines executed** — 574 ZIPs scored across original 4 metros (Pittsburgh, Los Angeles, Phoenix, Charlotte)
+- **Pipeline scripts updated for 8-metro expansion** — Chicago, Houston, Atlanta, Denver added to METRO_LABELS, STATE_METRO_MAP, STATE_NOISE_RASTERS, and all test assertions
+- **QA suite updated** — 8 test ZIPs, 8 expected metros, row count thresholds raised for ~1,290 ZIPs
 - **6 Supabase score tables populated:**
-  - `composite_scores` (Respiratory) — 574 rows
-  - `cardiovascular_scores` — 574 rows
-  - `stress_scores` — 574 rows
-  - `food_access_scores` — 574 rows
-  - `heat_scores` — 574 rows
-  - `overall_scores` — equal-weighted average of all 5 tools, 574 rows
+  - `composite_scores` (Respiratory) — 574 rows (pending re-run for 8 metros)
+  - `cardiovascular_scores` — 574 rows (pending re-run for 8 metros)
+  - `stress_scores` — 574 rows (pending re-run for 8 metros)
+  - `food_access_scores` — 574 rows (pending re-run for 8 metros)
+  - `heat_scores` — 574 rows (pending re-run for 8 metros)
+  - `overall_scores` — equal-weighted average of all 5 tools, 574 rows (pending re-run for 8 metros)
 - **All tables have `score_date` column** for historical tracking / score versioning
 - **QA suite:** `notebooks/qa/qa_data_integrity.py` — 106/106 tests passing (per-table integrity, cross-table consistency, metro distribution)
 - **Streamlit app live:** `health-score-tool-gnoxoobgjrakzvwnj4ktec.streamlit.app` — all 5 tabs + overall
@@ -25,10 +27,14 @@
 - Supabase schema established: `zip_codes`, `raw_signals`, `score_components`, `composite_scores`, `interpretations`, `score_config`, `cardiovascular_scores`, `stress_scores`, `food_access_scores`, `heat_scores`, `overall_scores`
 
 ### What's In Progress / Next Session Priorities
-1. **Move frontend to Lovable** — replace Streamlit with React components consuming Supabase REST API directly
+1. **Execute expanded pipelines in Colab** — run all 5 tools + overall for ~1,290 ZIPs across 8 metros
+   - Requires: ZIP lists for 4 new metros inserted into `zip_codes` table, 4 new BTS state noise rasters (IL, TX, GA, CO) uploaded to Google Drive
+   - CRITICAL: Export current 574-ZIP scores as CSV backup before running (global normalization will shift)
+   - After run: compare old vs new scores for original 574 ZIPs (recalibration audit)
+2. **Move frontend to Lovable** — replace Streamlit with React components consuming Supabase REST API directly
    - Supabase project ref: `hakiksjnpipgstomzzjy`
    - Supabase auto-exposes REST endpoints per table — Lovable can fetch directly using anon key
-2. **Expand metros** beyond the current 4 (Pittsburgh, LA, Phoenix, Charlotte)
+   - `/healthscore` content brief saved at `content/healthscore-brief.md`
 3. **Frontend polish** — design improvements, responsive layout, loading states
 
 ### What's Blocked / At Risk
@@ -57,7 +63,7 @@ The Health Environment Score — a neighborhood-level measurement of the environ
 **What makes it different:**
 - Measures health environment *outcomes* (not just built environment opportunity like Walk Score)
 - Multi-dimensional (5 interlocking scores, not a single metric)
-- ZIP-level specificity across four major metros
+- ZIP-level specificity across eight major metros
 - All inputs from authoritative federal sources (CDC PLACES, BTS, NLCD, USDA, NASA VIIRS, EPA AQS, EPA EJScreen)
 - Plain-language interpretations via Claude API — neighborhood health narrative, not raw numbers
 
@@ -370,6 +376,31 @@ Walk Score measures built environment opportunity. This measures health environm
 - `composite_scores` table (respiratory) has no `metro` column — QA cross-table checks must look up metro from `zip_codes`
 - Metro values in DB are title case ("Pittsburgh", not "pittsburgh") — QA constants were lowercase, causing false failures
 
+### 2026-04-16 — Metro Expansion (Pipeline Script Updates + Content Brief)
+**Completed:**
+- Updated `METRO_LABELS` in all 4 tool pipelines (cardiovascular, stress, food, heat) — added Chicago, Houston, Atlanta, Denver
+- Updated `STATE_NOISE_RASTERS` and `STATE_METRO_MAP` in cardiovascular pipeline — added IL, TX, GA, CO state rasters and metro mappings
+- Updated all test assertions across 5 pipeline scripts: "All 4 metros" → "All 8 metros", overall pipeline metro check threshold 4→8
+- Updated QA data integrity suite: 8 test ZIPs (added 60614/Chicago, 77002/Houston, 30309/Atlanta, 80202/Denver), 8 expected metros, row count threshold 540→1100
+- Updated all documentation files (CLAUDE.md, AGENTS.md, CONTEXT.md, ARCHITECTURE.md) with 8-metro coverage numbers
+- Created `/healthscore` content brief at `content/healthscore-brief.md` — full public-safe page content for Lovable frontend
+
+**Left off at:**
+- All pipeline scripts and QA suite are code-ready for 8 metros
+- Pipelines have NOT been re-run in Colab yet — Supabase still has 574 ZIPs (original 4 metros)
+
+**Next session should start with:**
+1. Assemble ZIP lists for Chicago, Houston, Atlanta, Denver from Census Bureau ZCTA data
+2. Insert new ZIP rows into `zip_codes` table in Supabase (title case metro values)
+3. Download 4 BTS state noise rasters (IL, TX, GA, CO) and upload to Google Drive
+4. Export current 574-ZIP scores as CSV backup (normalization will shift)
+5. Run all 5 pipelines + overall for full ~1,290 ZIP set in Colab
+6. Recalibration audit: compare old vs new scores for original 574 ZIPs
+
+**Any issues or surprises:**
+- Overall pipeline uses a hardcoded `>= 4` metro check (not METRO_LABELS-based like the other pipelines) — updated to `>= 8`
+- CONUS-wide rasters (NLCD impervious, NLCD tree canopy, NASA VIIRS) should already cover new metros — no new downloads needed for those
+
 ---
 
 ## Lessons Learned — Inherited by Tools 3–5
@@ -432,13 +463,13 @@ health-score-tool/
 ├── app.py                       ← Streamlit main app entry point, tab-based navigation
 ├── notebooks/
 │   ├── respiratory/             ← REFERENCE IMPLEMENTATION — read before building any new tool
-│   ├── cardiovascular/          ← ✅ complete — 574 ZIPs in cardiovascular_scores
-│   ├── stress/                  ← ✅ complete — 574 ZIPs in stress_scores
-│   ├── food/                    ← ✅ complete — 574 ZIPs in food_access_scores
-│   ├── heat/                    ← ✅ complete — 574 ZIPs in heat_scores
-│   ├── overall/                 ← ✅ complete — 574 ZIPs in overall_scores
+│   ├── cardiovascular/          ← ✅ complete — pipeline updated for 8 metros
+│   ├── stress/                  ← ✅ complete — pipeline updated for 8 metros
+│   ├── food/                    ← ✅ complete — pipeline updated for 8 metros
+│   ├── heat/                    ← ✅ complete — pipeline updated for 8 metros
+│   ├── overall/                 ← ✅ complete — pipeline updated for 8 metros
 │   └── qa/
-│       └── qa_data_integrity.py ← 106-test QA suite across all 6 tables and 4 metros
+│       └── qa_data_integrity.py ← QA suite updated for 8 metros, 8 test ZIPs
 ├── streamlit/
 │   └── tabs/                    ← per-tool Streamlit tab modules
 └── utils/

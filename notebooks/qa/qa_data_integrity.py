@@ -2,7 +2,7 @@
 # # QA Data Integrity Suite
 # **LaSalle Technologies Health Environment Score**
 #
-# Read-only verification across all 6 score tables and 4 metros.
+# Read-only verification across all 6 score tables and 8 metros.
 # Run in Colab after all pipelines have completed.
 #
 # **Test ZIPs:** Pittsburgh=15213, Los Angeles=90210, Charlotte=28277, Phoenix=85257
@@ -70,14 +70,18 @@ def run_tests(suite_name: str, tests: list) -> int:
 # %%
 # ── Constants ─────────────────────────────────────────────────
 
-TEST_ZIPS = ["15213", "90210", "28277", "85257"]
+TEST_ZIPS = ["15213", "90210", "28277", "85257", "60614", "77002", "30309", "80202"]
 TEST_ZIP_METROS = {
     "15213": "Pittsburgh",
     "90210": "Los Angeles",
     "28277": "Charlotte",
     "85257": "Phoenix",
+    "60614": "Chicago",
+    "77002": "Houston",
+    "30309": "Atlanta",
+    "80202": "Denver",
 }
-EXPECTED_METROS = {"Pittsburgh", "Los Angeles", "Phoenix", "Charlotte"}
+EXPECTED_METROS = {"Pittsburgh", "Los Angeles", "Phoenix", "Charlotte", "Chicago", "Houston", "Atlanta", "Denver"}
 VALID_GRADES = {"A", "B", "C", "D", "F"}
 
 # Table configurations
@@ -150,9 +154,9 @@ for table, grade_col, dim_filter in TABLE_CONFIGS:
 
     # 1. Row count >= 540
     tests.append((
-        f"Row count >= 540",
+        f"Row count >= 1100",
         lambda t=table, d=dim_filter: (
-            (count := get_count(t, d)) >= 540,
+            (count := get_count(t, d)) >= 1100,
             f"Got {count}"
         )
     ))
@@ -366,7 +370,7 @@ print(f"  Failed:      {total_tests - total_passed}")
 print("=" * 62)
 
 if total_passed == total_tests:
-    log("DONE", "ALL TESTS PASSED — data integrity verified across all 6 tables and 4 metros")
+    log("DONE", "ALL TESTS PASSED — data integrity verified across all 6 tables and 8 metros")
 else:
     log("WARN", f"{total_tests - total_passed} tests failed — review failures above before proceeding")
 

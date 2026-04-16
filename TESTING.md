@@ -140,7 +140,7 @@ def test_ingestion(df, tool_name: str, expected_columns: list[str],
             )),
 
         # ── Metro coverage ──
-        ("All 4 metros present",
+        ("All 8 metros present",
             lambda: (
                 set(df["metro"].unique()) == set(METRO_LABELS.values()),
                 f"Found: {sorted(df['metro'].unique())}, "
@@ -571,17 +571,17 @@ Step 6: Deploy Streamlit tab
 ## Suite 6 — QA Data Integrity (Cross-Table, Automated)
 
 **Location:** `notebooks/qa/qa_data_integrity.py`
-**Test count:** 106 tests (as of 2026-04-15)
+**Test count:** Updated for 8 metros, 8 test ZIPs (as of 2026-04-16)
 **Status:** All passing
 
-This suite runs read-only checks against all 6 Supabase score tables and 4 metros. It is the final verification gate after all pipelines have completed.
+This suite runs read-only checks against all 6 Supabase score tables and 8 metros. It is the final verification gate after all pipelines have completed.
 
 **What it covers:**
 - **Per-table integrity (6 tables × ~10 tests each):** row count ≥ 540, no null `composite_score`, no null grade, all 4 test ZIPs present, `score_date` non-null, valid grades, score range [0, 100]
 - **Cross-table consistency (4 test ZIPs × 5 checks each):** all 5 tool scores present, scores in range, grades valid, metro consistent across tables, overall ≈ mean of 5 tools (±1.0)
-- **Metro distribution (5 tables × 4 metros):** each metro has ≥ 20 ZIPs per table (skips `composite_scores` which has no `metro` column)
+- **Metro distribution (5 tables × 8 metros):** each metro has ≥ 20 ZIPs per table (skips `composite_scores` which has no `metro` column)
 
-**Test ZIPs:** Pittsburgh=15213, Los Angeles=90210, Charlotte=28277, Phoenix=85257
+**Test ZIPs:** Pittsburgh=15213, Los Angeles=90210, Charlotte=28277, Phoenix=85257, Chicago=60614, Houston=77002, Atlanta=30309, Denver=80202
 
 **Running:**
 - In Colab: uncomment the secrets block, run all cells

@@ -33,7 +33,7 @@
 4. SCORE       Weighted composite → letter grade
 5. INTERPRET   Claude API prompt → plain-language summary
 6. WRITE       Upsert to Supabase [tool]_scores table
-7. VERIFY      Query Supabase, spot-check 10 ZIPs across all 4 metros
+7. VERIFY      Query Supabase, spot-check 10 ZIPs across all 8 metros
 ```
 
 ---
@@ -157,7 +157,7 @@ Two-layer protection for proprietary methodology:
 
 ## Scalability Notes
 
-Current scope: 574 ZIPs scored, 4 metros, all 5 tools complete.
+Current scope: ~1,290 ZIPs scored, 8 metros, all 5 tools complete.
 
 Design decisions made with future scale in mind:
 - Upsert pattern supports expanding to new ZIPs without schema changes

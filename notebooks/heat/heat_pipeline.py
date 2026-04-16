@@ -130,6 +130,10 @@ METRO_LABELS = {
     "Los Angeles": "Los Angeles",
     "Phoenix": "Phoenix",
     "Charlotte": "Charlotte",
+    "Chicago": "Chicago",
+    "Houston": "Houston",
+    "Atlanta": "Atlanta",
+    "Denver": "Denver",
 }
 
 ALL_ZIPS = df_zips["zipcode"].tolist()
@@ -458,7 +462,7 @@ ingestion_tests = [
             df["zipcode"].duplicated().sum() == 0,
             f"{df['zipcode'].duplicated().sum()} duplicates"
         )),
-    ("All 4 metros present",
+    ("All 8 metros present",
         lambda: (
             set(df["metro"].dropna().unique()) >= set(METRO_LABELS.values()),
             f"Found: {sorted(df['metro'].dropna().unique())}"

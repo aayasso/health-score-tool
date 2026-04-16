@@ -5,7 +5,7 @@
 
 ## 1. Project Overview
 
-**LaSalle Technologies** has built **The Health Environment Score** — a neighborhood-level measurement of the environmental conditions that shape long-term health outcomes, across five dimensions: respiratory, cardiovascular, stress/sensory, food access, and heat & climate resilience. It synthesizes federal data into scored, letter-graded dimensions across **574 ZIP codes** in four pilot metros: **Pittsburgh, Los Angeles, Phoenix, and Charlotte**. All 5 tools are complete and live.
+**LaSalle Technologies** has built **The Health Environment Score** — a neighborhood-level measurement of the environmental conditions that shape long-term health outcomes, across five dimensions: respiratory, cardiovascular, stress/sensory, food access, and heat & climate resilience. It synthesizes federal data into scored, letter-graded dimensions across **~1,290 ZIP codes** in eight metros: **Pittsburgh, Los Angeles, Phoenix, Charlotte, Chicago, Houston, Atlanta, and Denver**. All 5 tools are complete and live.
 
 **Repo:** `health-score-tool` (GitHub)
 **Stack:** Google Colab → Supabase PostgreSQL → Streamlit (current) → Lovable/React (next) → Claude API
@@ -65,7 +65,7 @@ Public scores, proprietary methodology. Become the expected standard before mone
 | 5 | 🌡️ Heat & Climate Resilience Score | `heat_scores` | ✅ Complete | Orange/Red |
 | — | 📊 Overall Composite | `overall_scores` | ✅ Complete | — |
 
-**All 5 tools scored across 574 ZIPs in 4 metros. Overall scores computed as equal-weighted average of all 5 tool composites. All tables include `score_date` for historical tracking.**
+**All 5 tools scored across ~1,290 ZIPs in 8 metros. Overall scores computed as equal-weighted average of all 5 tool composites. All tables include `score_date` for historical tracking.**
 
 ---
 
@@ -109,7 +109,7 @@ Present this plan and wait for explicit written approval ("looks good", "proceed
 This is proprietary. Do not expose weights, normalization logic, or algorithmic decisions in any public-facing file, README, or UI copy.
 
 ### Pipeline (apply consistently across all tools)
-1. **Ingest** — Pull from federal data source for all 600 ZIPs across all 4 metros
+1. **Ingest** — Pull from federal data source for all ~1,300 ZIPs across all 8 metros
 2. **Validate** — Check for nulls, outliers, coverage gaps by metro; log issues
 3. **Normalize** — Min-max normalization per component, scaled 0–100
    - Formula: `normalized = (value - min) / (max - min) * 100`
@@ -241,8 +241,8 @@ All data is sourced from federal/public sources at no cost. This is a deliberate
 
 ### ZIP Coverage
 ```python
-# The 600 ZIPs span four metros — always filter to these
-METROS = ["Pittsburgh", "Los Angeles", "Phoenix", "Charlotte"]
+# The ~1,300 ZIPs span eight metros — always filter to these
+METROS = ["Pittsburgh", "Los Angeles", "Phoenix", "Charlotte", "Chicago", "Houston", "Atlanta", "Denver"]
 # Master ZIP list lives in the zip_codes Supabase table
 ```
 
@@ -511,7 +511,7 @@ all_passed = run_tests("CARDIOVASCULAR — INGESTION", [
     ("Row count >= 550",         lambda: (len(df) >= 550, f"got {len(df)}")),
     ("No null zip_codes",        lambda: (df['zip_code'].isna().sum() == 0, f"{df['zip_code'].isna().sum()} nulls")),
     ("CHD values in range 0–50", lambda: (df['chd_raw'].between(0, 50).all(), f"min={df['chd_raw'].min()}, max={df['chd_raw'].max()}")),
-    ("All 4 metros present",     lambda: (set(df['metro'].unique()) == set(METRO_LABELS.values()), f"found: {df['metro'].unique()}")),
+    ("All 8 metros present",     lambda: (set(df['metro'].unique()) == set(METRO_LABELS.values()), f"found: {df['metro'].unique()}")),
 ])
 
 if not all_passed:
@@ -524,7 +524,7 @@ Build and run all of the following test suites in every tool pipeline:
 **1. Ingestion Tests** — run immediately after pulling raw data
 - Row count ≥ 550 (allow small gap for ZIPs with no federal data)
 - No null ZIP codes
-- All 4 metros represented
+- All 8 metros represented
 - All expected columns present
 - Raw value ranges within plausible domain (e.g., inactivity rate 5–60%, not 0 or 100+)
 - No duplicate ZIP codes in the ingested data
@@ -590,7 +590,7 @@ Four specialized agent roles for ongoing development and QA:
 - Validates all 6 tables: `composite_scores`, `cardiovascular_scores`, `stress_scores`, `food_access_scores`, `heat_scores`, `overall_scores`
 - Checks `score_date` is populated on all rows across all tables
 - Reports any regressions after pipeline reruns
-- Spot-checks row counts (expect 574 per table), null rates, and grade distributions
+- Spot-checks row counts (expect ~1,290 per table), null rates, and grade distributions
 - Flags cross-table inconsistencies (e.g., ZIP in one table but not another)
 
 **When to run:** After any pipeline execution, data migration, or schema change.
@@ -609,7 +609,7 @@ Four specialized agent roles for ongoing development and QA:
 **When to run:** After any UI deployment, tab addition, or Lovable component build.
 
 ### Agent 3 — Metro Expansion
-**Scope:** Expands coverage beyond the current 4 metros by running all pipelines for new ZIPs.
+**Scope:** Expands coverage beyond the current 8 metros by running all pipelines for new ZIPs.
 
 **Primary responsibilities:**
 - Adds new metro ZIPs to `zip_codes` table in Supabase first

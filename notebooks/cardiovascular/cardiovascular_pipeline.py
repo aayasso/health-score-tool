@@ -128,6 +128,10 @@ METRO_LABELS = {
     "Los Angeles": "Los Angeles",
     "Phoenix": "Phoenix",
     "Charlotte": "Charlotte",
+    "Chicago": "Chicago",
+    "Houston": "Houston",
+    "Atlanta": "Atlanta",
+    "Denver": "Denver",
 }
 
 ALL_ZIPS = df_zips["zipcode"].tolist()
@@ -338,6 +342,10 @@ STATE_NOISE_RASTERS = {
     "CA": f"{DRIVE_PREFIX}/CA_rail_road_and_aviation_noise_2020.tif",
     "AZ": f"{DRIVE_PREFIX}/AZ_rail_road_and_aviation_noise_2020.tif",
     "NC": f"{DRIVE_PREFIX}/NC_rail_road_and_aviation_noise_2020.tif",
+    "IL": f"{DRIVE_PREFIX}/IL_rail_road_and_aviation_noise_2020.tif",
+    "TX": f"{DRIVE_PREFIX}/TX_rail_road_and_aviation_noise_2020.tif",
+    "GA": f"{DRIVE_PREFIX}/GA_rail_road_and_aviation_noise_2020.tif",
+    "CO": f"{DRIVE_PREFIX}/CO_rail_road_and_aviation_noise_2020.tif",
 }
 
 # Map each state to the metros whose ZIPs fall within that state's raster
@@ -346,6 +354,10 @@ STATE_METRO_MAP = {
     "CA": ["Los Angeles"],
     "AZ": ["Phoenix"],
     "NC": ["Charlotte"],
+    "IL": ["Chicago"],
+    "TX": ["Houston"],
+    "GA": ["Atlanta"],
+    "CO": ["Denver"],
 }
 
 ZCTA_SHAPEFILE_PATH = f"{DRIVE_PREFIX}/tl_2020_us_zcta520.shp"
@@ -582,7 +594,7 @@ ingestion_tests = [
             df["zipcode"].duplicated().sum() == 0,
             f"{df['zipcode'].duplicated().sum()} duplicates"
         )),
-    ("All 4 metros present",
+    ("All 8 metros present",
         lambda: (
             set(df["metro"].dropna().unique()) >= set(METRO_LABELS.values()),
             f"Found: {sorted(df['metro'].dropna().unique())}"

@@ -6,7 +6,7 @@
 
 ## Who You Are Working With
 
-You are building **The Health Environment Score** for **LaSalle Technologies** — a neighborhood-level measurement of the environmental conditions that shape long-term health outcomes, across five dimensions: respiratory, cardiovascular, stress/sensory, food access, and heat & climate resilience. All 5 tools are complete and live across 574 ZIP codes in Pittsburgh, Los Angeles, Phoenix, and Charlotte. The platform is now transitioning from Streamlit to Lovable (React + Supabase REST API).
+You are building **The Health Environment Score** for **LaSalle Technologies** — a neighborhood-level measurement of the environmental conditions that shape long-term health outcomes, across five dimensions: respiratory, cardiovascular, stress/sensory, food access, and heat & climate resilience. All 5 tools are complete and live across ~1,290 ZIP codes in eight metros: Pittsburgh, Los Angeles, Phoenix, Charlotte, Chicago, Houston, Atlanta, and Denver. The platform is now transitioning from Streamlit to Lovable (React + Supabase REST API).
 
 ### Business Model: "Public Score, Private Engine"
 
@@ -104,8 +104,8 @@ When uncertain whether something is proprietary, treat it as proprietary and ask
 
 | Item | Detail |
 |---|---|
-| Pilot metros | Pittsburgh PA · Los Angeles CA · Phoenix AZ · Charlotte NC |
-| ZIP coverage | 574 ZIPs scored across all 4 metros |
+| Metros | Pittsburgh PA · Los Angeles CA · Phoenix AZ · Charlotte NC · Chicago IL · Houston TX · Atlanta GA · Denver CO |
+| ZIP coverage | ~1,290 ZIPs scored across all 8 metros |
 | Active tool | All 5 tools ✅ complete — see `CONTEXT.md` for next priorities |
 | Tools | 1-Respiratory ✅ · 2-Cardiovascular ✅ · 3-Stress ✅ · 4-Food Access ✅ · 5-Heat ✅ |
 | 6th table | `overall_scores` — equal-weighted average of all 5 tool composites |
@@ -113,7 +113,7 @@ When uncertain whether something is proprietary, treat it as proprietary and ask
 | Supabase project | `hakiksjnpipgstomzzjy` — auto-exposes REST endpoints per table |
 | Streamlit app | `health-score-tool-gnoxoobgjrakzvwnj4ktec.streamlit.app` |
 | LaSalle site | `lasalletech.ai` (built in Lovable) |
-| QA suite | `notebooks/qa/qa_data_integrity.py` — 106/106 tests passing |
+| QA suite | `notebooks/qa/qa_data_integrity.py` — updated for 8 metros, 8 test ZIPs |
 | Scoring pipeline | Ingest → Validate → Normalize → Weight → Composite → Grade → Interpret → Upsert |
 | Grade scale | A ≥ 80 · B 65–79 · C 50–64 · D 35–49 · F < 35 |
 | Credentials | Colab secrets manager only — `SUPABASE_URL`, `SUPABASE_KEY`, `ANTHROPIC_API_KEY` |

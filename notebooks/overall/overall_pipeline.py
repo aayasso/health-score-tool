@@ -155,8 +155,8 @@ log("TEST", "Running Suite 1 — Ingestion Tests")
 ingestion_tests = [
     ("ZIP count >= 550",
         lambda: (len(df_zips) >= 550, f"Got {len(df_zips)}")),
-    ("All 4 metros present",
-        lambda: (df_zips["metro"].nunique() >= 4, f"Got {df_zips['metro'].nunique()}")),
+    ("All 8 metros present",
+        lambda: (df_zips["metro"].nunique() >= 8, f"Got {df_zips['metro'].nunique()}")),
 ]
 
 for col in SCORE_COLS:
