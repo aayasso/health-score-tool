@@ -268,10 +268,13 @@ log("START", f"Inserting {len(df_new)} new ZIPs into zip_codes table")
 failed_zips = []
 inserted = 0
 
+STATE_MAP = {"Chicago": "IL", "Houston": "TX", "Atlanta": "GA", "Denver": "CO"}
+
 for i, row in df_new.iterrows():
     record = {
         "zipcode": row["zipcode"],
         "metro": row["metro"],
+        "state": STATE_MAP[row["metro"]],
     }
     try:
         supabase.table("zip_codes").upsert(
