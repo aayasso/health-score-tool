@@ -346,74 +346,108 @@ else:
     log("WARN", "Some test ZIPs are missing — check the crosswalk data or insert manually")
 
 # %% [markdown]
-# ## 4 · BTS State Noise Raster Downloads
+# ## 4 · BTS Noise Raster Setup
 #
-# The cardiovascular pipeline's `STATE_NOISE_RASTERS` now expects 8 state rasters.
-# The original 4 (PA, CA, AZ, NC) are already on Google Drive. You need to download
-# 4 new state rasters for **IL, TX, GA, CO**.
+# The cardiovascular pipeline needs BTS noise rasters for all 8 states.
+# - **Original 4 states (PA, CA, AZ, NC):** Clipped per-state rasters already on Drive.
+# - **New 4 states (IL, TX, GA, CO):** Use the CONUS-wide raster from BTS.
 #
-# ### Download Instructions
+# This cell downloads the CONUS raster if it's not already on Drive.
+# The cardiovascular pipeline's `STATE_NOISE_RASTERS` points IL/TX/GA/CO
+# to the CONUS file — `rasterstats` handles windowed reads so only the
+# relevant geographic region is loaded into memory.
 #
-# 1. Go to **BTS National Transportation Noise Map**:
-#    https://www.bts.gov/geospatial/national-transportation-noise-map
-#
-# 2. Navigate to the **Data Download** section. Select **"Aviation and Road Noise"**
-#    or **"Rail, Road, and Aviation Noise"** (whichever matches your existing rasters —
-#    check the filenames of your PA/CA/AZ/NC files).
-#
-# 3. Download the following 4 state rasters:
-#    - **Illinois (IL)**: `IL_rail_road_and_aviation_noise_2020.tif`
-#    - **Texas (TX)**: `TX_rail_road_and_aviation_noise_2020.tif`
-#    - **Georgia (GA)**: `GA_rail_road_and_aviation_noise_2020.tif`
-#    - **Colorado (CO)**: `CO_rail_road_and_aviation_noise_2020.tif`
-#
-# 4. Upload all 4 files to Google Drive at:
-#    `/content/drive/MyDrive/Colab Notebooks/health-score-data/`
-#
-#    They must be in the same directory as the existing state rasters.
-#
-# ### Verification
-#
-# Run the cell below after uploading to confirm all 8 rasters are present.
-#
-# ### CONUS Rasters (No Action Needed)
-#
-# The following CONUS-wide rasters already cover all 8 metros — no new downloads:
-# - **NLCD Impervious Surface** — used by Cardiovascular + Heat pipelines
-# - **NLCD Tree Canopy** — used by Stress + Heat pipelines
-# - **NASA VIIRS** — used by Stress pipeline
-#
-# These are continental-US datasets that include IL, TX, GA, and CO by default.
+# **Other CONUS rasters (no action needed):**
+# - NLCD Impervious Surface — Cardiovascular + Heat pipelines
+# - NLCD Tree Canopy — Stress + Heat pipelines
+# - NASA VIIRS — Stress pipeline
+# These already cover all 8 metros.
 
 # %%
-log("TEST", "Checking for all 8 BTS state noise rasters on Google Drive")
+import zipfile
+from io import BytesIO
 
-STATE_NOISE_RASTERS = {
+CONUS_NOISE_URL = "https://www.bts.gov/bts-net-storage/CONUS_rail_road_and_aviation_noise_2020.zip"
+CONUS_NOISE_TIF = f"{DRIVE_PREFIX}/CONUS_rail_road_and_aviation_noise_2020.tif"
+
+# Original per-state rasters (should already exist on Drive)
+ORIGINAL_STATE_RASTERS = {
     "PA": f"{DRIVE_PREFIX}/PA_rail_road_and_aviation_noise_2020.tif",
     "CA": f"{DRIVE_PREFIX}/CA_rail_road_and_aviation_noise_2020.tif",
     "AZ": f"{DRIVE_PREFIX}/AZ_rail_road_and_aviation_noise_2020.tif",
     "NC": f"{DRIVE_PREFIX}/NC_rail_road_and_aviation_noise_2020.tif",
-    "IL": f"{DRIVE_PREFIX}/IL_rail_road_and_aviation_noise_2020.tif",
-    "TX": f"{DRIVE_PREFIX}/TX_rail_road_and_aviation_noise_2020.tif",
-    "GA": f"{DRIVE_PREFIX}/GA_rail_road_and_aviation_noise_2020.tif",
-    "CO": f"{DRIVE_PREFIX}/CO_rail_road_and_aviation_noise_2020.tif",
 }
 
-missing = []
-for state, path in STATE_NOISE_RASTERS.items():
+# ── Check original state rasters ─────────────────────────────
+log("START", "Checking BTS noise rasters")
+
+for state, path in ORIGINAL_STATE_RASTERS.items():
     if os.path.exists(path):
         size_mb = os.path.getsize(path) / (1024 * 1024)
         log("PASS", f"  {state}: found ({size_mb:.1f} MB)")
     else:
-        log("FAIL", f"  {state}: NOT FOUND at {path}")
-        missing.append(state)
+        log("WARN", f"  {state}: NOT FOUND at {path} — original state raster missing")
 
-if missing:
-    log("WARN", f"Missing rasters for: {', '.join(missing)}")
-    log("INFO", "Download from: https://www.bts.gov/geospatial/national-transportation-noise-map")
-    log("INFO", f"Upload to: {DRIVE_PREFIX}/")
+# ── Download CONUS raster if missing ─────────────────────────
+if os.path.exists(CONUS_NOISE_TIF):
+    size_mb = os.path.getsize(CONUS_NOISE_TIF) / (1024 * 1024)
+    log("PASS", f"  CONUS: already on Drive ({size_mb:.1f} MB) — skipping download")
 else:
-    log("DONE", "All 8 BTS state noise rasters present — ready for pipeline execution")
+    log("INFO", f"  CONUS raster not found. Downloading from BTS...")
+    log("INFO", f"  URL: {CONUS_NOISE_URL}")
+    log("INFO", "  This is a large file (~2-4 GB) — download may take several minutes.")
+
+    try:
+        resp = requests.get(CONUS_NOISE_URL, stream=True, timeout=600)
+        resp.raise_for_status()
+
+        # Read into memory and extract .tif from zip
+        total_bytes = int(resp.headers.get("content-length", 0))
+        log("INFO", f"  Download size: {total_bytes / (1024**3):.2f} GB")
+
+        chunks = []
+        downloaded = 0
+        for chunk in resp.iter_content(chunk_size=8 * 1024 * 1024):  # 8MB chunks
+            chunks.append(chunk)
+            downloaded += len(chunk)
+            if total_bytes > 0 and downloaded % (100 * 1024 * 1024) < 8 * 1024 * 1024:
+                pct = downloaded / total_bytes * 100
+                log("INFO", f"  Downloaded {downloaded / (1024**3):.2f} GB ({pct:.0f}%)")
+
+        zip_bytes = b"".join(chunks)
+        log("PASS", f"  Download complete ({len(zip_bytes) / (1024**3):.2f} GB)")
+
+        # Extract .tif from zip
+        log("INFO", "  Extracting .tif from zip archive...")
+        with zipfile.ZipFile(BytesIO(zip_bytes)) as zf:
+            tif_files = [f for f in zf.namelist() if f.lower().endswith(".tif")]
+            if not tif_files:
+                log("ERROR", f"  No .tif files found in zip. Contents: {zf.namelist()}")
+                raise FileNotFoundError("No .tif file in downloaded zip")
+
+            tif_name = tif_files[0]
+            log("INFO", f"  Extracting: {tif_name}")
+
+            with zf.open(tif_name) as src, open(CONUS_NOISE_TIF, "wb") as dst:
+                while True:
+                    block = src.read(8 * 1024 * 1024)
+                    if not block:
+                        break
+                    dst.write(block)
+
+        size_mb = os.path.getsize(CONUS_NOISE_TIF) / (1024 * 1024)
+        log("PASS", f"  CONUS raster saved: {CONUS_NOISE_TIF} ({size_mb:.1f} MB)")
+
+        # Free memory
+        del chunks, zip_bytes
+
+    except requests.RequestException as e:
+        log("ERROR", f"  Download failed: {e}")
+        log("INFO", "  Manual fallback: download from https://www.bts.gov/geospatial/national-transportation-noise-map")
+        log("INFO", f"  Extract the .tif and upload to: {CONUS_NOISE_TIF}")
+        raise
+
+log("DONE", "BTS noise raster setup complete")
 
 # %% [markdown]
 # ## 5 · Final Verification Summary
@@ -467,13 +501,16 @@ for zc, metro in TEST_ZIPS.items():
     else:
         log("FAIL", f"  Test ZIP {zc} ({metro}) missing")
 
-# Check 4: BTS rasters
-for state, path in STATE_NOISE_RASTERS.items():
+# Check 4: BTS rasters (4 state + 1 CONUS)
+raster_checks = list(ORIGINAL_STATE_RASTERS.items()) + [("CONUS", CONUS_NOISE_TIF)]
+rasters_found = 0
+for label, path in raster_checks:
     checks_total += 1
     if os.path.exists(path):
         checks_passed += 1
+        rasters_found += 1
     else:
-        log("FAIL", f"  BTS raster {state} missing")
+        log("FAIL", f"  BTS raster {label} missing")
 
 # ── Summary ──────────────────────────────────────────────────
 print(f"\n{'='*62}")
@@ -482,7 +519,7 @@ print(f"{'='*62}")
 print(f"  Checks passed: {checks_passed}/{checks_total}")
 print(f"  Backup CSVs:   {len(SCORE_TABLES)} tables backed up")
 print(f"  zip_codes:     {len(df_final)} ZIPs across {metro_count} metros")
-print(f"  BTS rasters:   {8 - len(missing) if 'missing' in dir() else '?'}/8 present")
+print(f"  BTS rasters:   {rasters_found}/5 present (4 state + 1 CONUS)")
 print(f"{'='*62}")
 
 if checks_passed == checks_total:
