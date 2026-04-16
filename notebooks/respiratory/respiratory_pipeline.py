@@ -402,8 +402,7 @@ for _, row in df_air_quality.dropna(subset=["air_quality_raw"]).iterrows():
             record,
             on_conflict="zipcode,signal_name,data_source,data_vintage"
         ).execute()
-    except Exception as e:
-        log("ERROR", f"  Failed to write AQ for ZIP {row['zipcode']}: {e}")
+    except Exception:
         aq_failed.append(row["zipcode"])
 
 if aq_failed:
@@ -416,12 +415,11 @@ else:
 # ## 3 · EPA EJScreen Ingestion (Environmental Burden)
 #
 # EJScreen provides census tract-level environmental justice indicators. We use
-# 4 percentile indicators and average them into a single environmental burden score.
+# 3 percentile indicators and average them into a single environmental burden score.
 # Tract → ZIP aggregation uses HUD Tract-ZIP crosswalk with population-weighted
 # averaging (same pattern as USDA FARA in food_pipeline.py).
 #
 # **Indicators (state percentiles):**
-# - `P_CANCER` — Air toxics cancer risk
 # - `P_PNPL` — Proximity to National Priorities List (Superfund) sites
 # - `P_PWDIS` — Wastewater discharge indicator
 # - `P_PTRAF` — Traffic proximity and volume
@@ -454,9 +452,8 @@ if tract_col is None:
 log("INFO", f"  Using tract ID column: '{tract_col}'")
 df_ej_raw[tract_col] = df_ej_raw[tract_col].astype(str).str.zfill(11)
 
-# ── Extract the 4 percentile indicators ──────────────────────
+# ── Extract the 3 percentile indicators ──────────────────────
 EJSCREEN_COLS = {
-    "P_CANCER": "air_toxics",
     "P_PNPL": "hazardous_proximity",
     "P_PWDIS": "wastewater",
     "P_PTRAF": "traffic",
@@ -471,13 +468,13 @@ for col in EJSCREEN_COLS.keys():
             df_ej_raw[col] = df_ej_raw[alt_col]
             log("INFO", f"  Mapped alternate column {alt_col} → {col}")
         else:
-            log("ERROR", f"  Required column '{col}' not found. Available: {[c for c in df_ej_raw.columns if 'CANCER' in c or 'PNPL' in c or 'PWDIS' in c or 'PTRAF' in c]}")
+            log("ERROR", f"  Required column '{col}' not found. Available: {[c for c in df_ej_raw.columns if 'PNPL' in c or 'PWDIS' in c or 'PTRAF' in c]}")
             raise RuntimeError(f"EJScreen column '{col}' missing. Bring this error to Claude Code.")
 
 for col in EJSCREEN_COLS.keys():
     df_ej_raw[col] = pd.to_numeric(df_ej_raw[col], errors="coerce")
 
-# Average the 4 percentiles into a single burden score (0–100 scale)
+# Average the 3 percentiles into a single burden score (0–100 scale)
 df_ej_raw["environmental_burden_raw"] = df_ej_raw[list(EJSCREEN_COLS.keys())].mean(axis=1)
 
 log("INFO", f"  environmental_burden_raw range: "
@@ -548,8 +545,7 @@ for _, row in df_burden.dropna(subset=["environmental_burden_raw"]).iterrows():
             record,
             on_conflict="zipcode,signal_name,data_source,data_vintage"
         ).execute()
-    except Exception as e:
-        log("ERROR", f"  Failed to write EJ for ZIP {row['zipcode']}: {e}")
+    except Exception:
         ej_failed.append(row["zipcode"])
 
 if ej_failed:
@@ -750,8 +746,7 @@ for _, row in df_resp_cdc.dropna(subset=["health_outcomes_raw"]).iterrows():
                     record,
                     on_conflict="zipcode,signal_name,data_source,data_vintage"
                 ).execute()
-            except Exception as e:
-                log("ERROR", f"  Failed to write {signal_name} for ZIP {row['zipcode']}: {e}")
+            except Exception:
                 ho_failed.append(row["zipcode"])
 
 if ho_failed:
