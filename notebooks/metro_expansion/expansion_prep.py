@@ -147,8 +147,8 @@ else:
 # %% [markdown]
 # ## 2 · Assemble New Metro ZIP Lists
 #
-# Uses the HUD USPS ZIP–CBSA crosswalk to identify ZIPs in each new metro.
-# This is the same MSA-core approach used for the original 4 metros.
+# Downloads the Census Bureau ZCTA-to-CBSA relationship file directly in Colab
+# (no login required) and filters for the 4 new MSA CBSA codes.
 #
 # **CBSA codes (from OMB metropolitan statistical area delineations):**
 # - Chicago-Naperville-Elgin, IL-IN-WI: **16980**
@@ -156,62 +156,52 @@ else:
 # - Atlanta-Sandy Springs-Alpharetta, GA: **12060**
 # - Denver-Aurora-Lakewood, CO: **19740**
 #
-# **Data source:** HUD USPS ZIP Code Crosswalk Files
-# https://www.huduser.gov/portal/datasets/usps_crosswalk.html
-#
-# Download the **ZIP–CBSA** crosswalk (most recent quarter) as an Excel file
-# and upload to Google Drive at:
-# `/content/drive/MyDrive/Colab Notebooks/health-score-data/ZIP_CBSA_crosswalk.xlsx`
-#
-# If you prefer to use the Census Bureau delineation file instead, see the
-# alternative approach in the comments below.
+# **Data source:** Census Bureau 2020 ZCTA-to-CBSA Relationship File
+# https://www2.census.gov/geo/docs/maps-data/data/rel2020/zcta520/tab20_zcta520_cbsa20_natl.txt
+# Pipe-delimited, no login needed. Key columns: GEOID_ZCTA5_20 (ZIP), GEOID_CBSA_20 (CBSA code).
 
 # %%
 log("START", "Assembling ZIP lists for 4 new metros")
 
 # ── New metro definitions ────────────────────────────────────
 NEW_METROS = {
-    16980: "Chicago",
-    26420: "Houston",
-    12060: "Atlanta",
-    19740: "Denver",
+    "16980": "Chicago",
+    "26420": "Houston",
+    "12060": "Atlanta",
+    "19740": "Denver",
 }
 
-# ── Option A: HUD USPS ZIP–CBSA crosswalk (preferred) ───────
-# Download from: https://www.huduser.gov/portal/datasets/usps_crosswalk.html
-# Select: "ZIP → CBSA" crosswalk, most recent quarter
-# Upload the Excel file to Google Drive at the path below.
+# ── Download Census ZCTA-to-CBSA relationship file ──────────
+CENSUS_URL = "https://www2.census.gov/geo/docs/maps-data/data/rel2020/zcta520/tab20_zcta520_cbsa20_natl.txt"
 
-CROSSWALK_PATH = f"{DRIVE_PREFIX}/ZIP_CBSA_crosswalk.xlsx"
+log("INFO", f"Downloading Census ZCTA-to-CBSA file from {CENSUS_URL}")
+resp = requests.get(CENSUS_URL, timeout=60)
+resp.raise_for_status()
+log("PASS", f"Downloaded ({len(resp.content):,} bytes)")
 
-if not os.path.exists(CROSSWALK_PATH):
-    log("ERROR", f"Crosswalk file not found at: {CROSSWALK_PATH}")
-    log("INFO", "Download from: https://www.huduser.gov/portal/datasets/usps_crosswalk.html")
-    log("INFO", "Select 'ZIP → CBSA' crosswalk, most recent quarter, save as .xlsx")
-    raise FileNotFoundError(f"Upload crosswalk file to {CROSSWALK_PATH} before continuing")
+# ── Parse pipe-delimited file ────────────────────────────────
+from io import StringIO
 
-# ── Load crosswalk ───────────────────────────────────────────
-df_xwalk = pd.read_excel(CROSSWALK_PATH, dtype={"ZIP": str, "CBSA": str})
-log("INFO", f"Loaded crosswalk: {len(df_xwalk)} rows, columns: {list(df_xwalk.columns)}")
+df_xwalk = pd.read_csv(
+    StringIO(resp.text),
+    sep="|",
+    dtype=str,  # keep all columns as strings to preserve leading zeros
+)
+log("INFO", f"Parsed crosswalk: {len(df_xwalk)} rows, columns: {list(df_xwalk.columns)}")
 
-# The HUD crosswalk has columns: ZIP, CBSA, RES_RATIO, BUS_RATIO, OTH_RATIO, TOT_RATIO
-# ZIP may also be labeled "zip" — normalize column names
-df_xwalk.columns = df_xwalk.columns.str.upper().str.strip()
-if "ZIP" not in df_xwalk.columns or "CBSA" not in df_xwalk.columns:
-    log("ERROR", f"Expected columns ZIP and CBSA, got: {list(df_xwalk.columns)}")
-    raise ValueError("Crosswalk file has unexpected column names — check the file format")
-
-# Convert CBSA to int for matching (remove leading zeros if any)
-df_xwalk["CBSA_INT"] = pd.to_numeric(df_xwalk["CBSA"], errors="coerce")
+# Key columns: GEOID_ZCTA5_20 (the 5-digit ZIP/ZCTA) and GEOID_CBSA_20 (the CBSA code)
+if "GEOID_ZCTA5_20" not in df_xwalk.columns or "GEOID_CBSA_20" not in df_xwalk.columns:
+    log("ERROR", f"Expected columns GEOID_ZCTA5_20 and GEOID_CBSA_20, got: {list(df_xwalk.columns)}")
+    raise ValueError("Census relationship file has unexpected column names — check the URL/format")
 
 # ── Filter for new metros ────────────────────────────────────
 new_zip_records = []
 
 for cbsa_code, metro_label in NEW_METROS.items():
-    metro_zips = df_xwalk[df_xwalk["CBSA_INT"] == cbsa_code]["ZIP"].unique().tolist()
+    metro_zips = df_xwalk[df_xwalk["GEOID_CBSA_20"] == cbsa_code]["GEOID_ZCTA5_20"].unique().tolist()
     # Ensure 5-digit zero-padded
     metro_zips = [z.zfill(5) for z in metro_zips]
-    log("INFO", f"  {metro_label} (CBSA {cbsa_code}): {len(metro_zips)} ZIPs found")
+    log("INFO", f"  {metro_label} (CBSA {cbsa_code}): {len(metro_zips)} ZCTAs found")
 
     for z in metro_zips:
         new_zip_records.append({"zipcode": z, "metro": metro_label})
