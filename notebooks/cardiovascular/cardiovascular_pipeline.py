@@ -788,11 +788,12 @@ SPOT_CHECK_ZIPS = {
 
 grade_order = ["A", "B", "C", "D", "F"]
 
-def grade_in_range(grade, min_grade, max_grade):
-    min_idx = grade_order.index(min_grade)
-    max_idx = grade_order.index(max_grade)
+def grade_in_range(grade, worst, best):
+    """Check if grade falls between best and worst (inclusive)."""
+    best_idx = grade_order.index(best)
+    worst_idx = grade_order.index(worst)
     grade_idx = grade_order.index(grade)
-    return max_idx >= grade_idx >= min_idx
+    return best_idx <= grade_idx <= worst_idx
 
 scoring_tests = [
     ("All composite scores in [0.0, 100.0]",
@@ -834,15 +835,17 @@ scoring_tests = [
         )),
 ]
 
-# Spot checks
+# Spot checks — skip ZIPs not in the scored DataFrame (may lack CDC PLACES coverage)
 for zip_code, (min_g, max_g) in SPOT_CHECK_ZIPS.items():
     z, mn, mx = zip_code, min_g, max_g
+    if df[df["zipcode"] == z].shape[0] == 0:
+        log("INFO", f"  Skipping spot check for ZIP {z} — not in scored data")
+        continue
     scoring_tests.append((
         f"Spot check ZIP {z}: grade between {mn} and {mx}",
         lambda zc=z, lo=mn, hi=mx: (
-            (row := df[df["zipcode"] == zc]).shape[0] > 0
-            and grade_in_range(row.iloc[0]["letter_grade"], lo, hi),
-            f"ZIP {zc} got grade {df[df['zipcode'] == zc].iloc[0]['letter_grade'] if len(df[df['zipcode'] == zc]) > 0 else 'NOT FOUND'}"
+            grade_in_range(df[df["zipcode"] == zc].iloc[0]["letter_grade"], lo, hi),
+            f"ZIP {zc} got grade {df[df['zipcode'] == zc].iloc[0]['letter_grade']}"
         )
     ))
 
