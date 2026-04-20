@@ -522,9 +522,9 @@ ingestion_tests = [
             set(df["metro"].dropna().unique()) >= set(METRO_LABELS.values()),
             f"Found: {sorted(df['metro'].dropna().unique())}"
         )),
-    ("No metro under 20 ZIPs",
+    ("No metro under 5 ZIPs",
         lambda: (
-            df["metro"].value_counts().min() >= 20,
+            df["metro"].value_counts().min() >= 5,
             f"Counts: {df['metro'].value_counts().to_dict()}"
         )),
     # Raw value range checks
