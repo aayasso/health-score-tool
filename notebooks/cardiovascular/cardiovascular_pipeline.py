@@ -470,7 +470,7 @@ impervious_already_done = raster_already_processed("nlcd_impervious")
 
 # %%
 # ── Paths (update in Colab) ──────────────────────────────────
-IMPERVIOUS_RASTER_PATH = f"{DRIVE_PREFIX}/nlcd_impervious.tif"
+IMPERVIOUS_RASTER_PATH = f"{DRIVE_PREFIX}/Annual_NLCD_FctImp_2021_CU_C1V1/Annual_NLCD_FctImp_2021_CU_C1V1.tif"
 
 if not impervious_already_done:
     # Reuse ZCTA if already loaded, otherwise reload
