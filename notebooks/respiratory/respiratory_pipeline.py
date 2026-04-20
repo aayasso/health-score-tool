@@ -394,8 +394,8 @@ for _, row in df_air_quality.dropna(subset=["air_quality_raw"]).iterrows():
         "signal_name": "air_quality_index",
         "data_source": "epa_aqs",
         "data_vintage": int(AQS_YEAR),
-        "raw_value": float(row["air_quality_raw"]),
-        "unit": "index_0_100",
+        "signal_value": float(row["air_quality_raw"]),
+        "units": "index_0_100",
     }
     try:
         supabase.table("raw_signals").upsert(
@@ -537,8 +537,8 @@ for _, row in df_burden.dropna(subset=["environmental_burden_raw"]).iterrows():
         "signal_name": "ejscreen_burden",
         "data_source": "epa_ejscreen",
         "data_vintage": 2024,
-        "raw_value": float(row["environmental_burden_raw"]),
-        "unit": "percentile_avg",
+        "signal_value": float(row["environmental_burden_raw"]),
+        "units": "percentile_avg",
     }
     try:
         supabase.table("raw_signals").upsert(
@@ -586,11 +586,11 @@ canopy_in_raw_signals = raster_already_processed("nlcd_tree_canopy")
 if canopy_in_raw_signals:
     # Load from raw_signals
     canopy_result = supabase.table("raw_signals") \
-        .select("zipcode, raw_value") \
+        .select("zipcode, signal_value") \
         .eq("data_source", "nlcd_tree_canopy") \
         .execute()
     df_green = pd.DataFrame(canopy_result.data)
-    df_green = df_green.rename(columns={"raw_value": "green_cover_raw"})
+    df_green = df_green.rename(columns={"signal_value": "green_cover_raw"})
     df_green["green_cover_raw"] = pd.to_numeric(df_green["green_cover_raw"], errors="coerce")
     log("PASS", f"  Loaded {len(df_green)} tree canopy values from raw_signals")
 else:
@@ -738,8 +738,8 @@ for _, row in df_resp_cdc.dropna(subset=["health_outcomes_raw"]).iterrows():
                 "signal_name": signal_name,
                 "data_source": "cdc_places",
                 "data_vintage": 2024,
-                "raw_value": float(row[col_name]),
-                "unit": "percent",
+                "signal_value": float(row[col_name]),
+                "units": "percent",
             }
             try:
                 supabase.table("raw_signals").upsert(

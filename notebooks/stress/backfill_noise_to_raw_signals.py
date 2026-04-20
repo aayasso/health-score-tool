@@ -88,8 +88,8 @@ for row in all_rows:
         "signal_name": "noise_dnl",
         "data_source": "bts_noise",
         "data_vintage": 2020,
-        "raw_value": float(row["noise_raw"]),
-        "unit": "dB_DNL",
+        "signal_value": float(row["noise_raw"]),
+        "units": "dB_DNL",
     }
     try:
         supabase.table("raw_signals").upsert(

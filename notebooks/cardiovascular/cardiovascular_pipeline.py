@@ -417,35 +417,6 @@ if not noise_already_done:
     log("INFO", f"  Noise processing complete: {df_noise['noise_raw'].notna().sum()} ZIPs with data")
     log("INFO", f"  Range: {df_noise['noise_raw'].min():.1f} – {df_noise['noise_raw'].max():.1f} dB")
 
-    # ── Schema cache warm-up for raw_signals ─────────────────
-    # PostgREST may have a stale schema cache after long raster processing.
-    # Reinitialize client and confirm raw_signals is visible before writing.
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-    log("INFO", "  Reinitialized Supabase client for raw_signals writes")
-
-    MAX_RETRIES = 5
-    RETRY_DELAY = 3
-
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            test = supabase.table("raw_signals").select("zipcode").limit(1).execute()
-            log("PASS", f"  raw_signals schema cache warm-up succeeded on attempt {attempt}")
-            break
-        except Exception as e:
-            log("WARN", f"  raw_signals warm-up attempt {attempt}/{MAX_RETRIES} failed: {e}")
-            if attempt < MAX_RETRIES:
-                time.sleep(RETRY_DELAY)
-    else:
-        raise RuntimeError(
-            "\n" + "!" * 62 + "\n"
-            "  PostgREST cannot see the raw_signals table after 5 attempts.\n"
-            "  This is a schema cache issue, not a missing table.\n\n"
-            "  FIX: Open Supabase SQL Editor and run:\n"
-            "    NOTIFY pgrst, 'reload schema';\n\n"
-            "  Wait 10 seconds, then re-run this cell.\n"
-            + "!" * 62 + "\n"
-        )
-
     # ── Write to raw_signals for reuse by Stress tool ────────
     log("INFO", "  Writing noise values to raw_signals table...")
     noise_failed = []
@@ -455,8 +426,8 @@ if not noise_already_done:
             "signal_name": "noise_dnl",
             "data_source": "bts_noise",
             "data_vintage": 2024,
-            "raw_value": float(row["noise_raw"]),
-            "unit": "dB_DNL",
+            "signal_value": float(row["noise_raw"]),
+            "units": "dB_DNL",
         }
         try:
             supabase.table("raw_signals").upsert(
@@ -476,11 +447,11 @@ else:
     # Load from raw_signals
     log("INFO", "  Loading cached noise data from raw_signals...")
     noise_result = supabase.table("raw_signals") \
-        .select("zipcode, raw_value") \
+        .select("zipcode, signal_value") \
         .eq("data_source", "bts_noise") \
         .execute()
     df_noise = pd.DataFrame(noise_result.data)
-    df_noise = df_noise.rename(columns={"raw_value": "noise_raw"})
+    df_noise = df_noise.rename(columns={"signal_value": "noise_raw"})
     df_noise["noise_raw"] = pd.to_numeric(df_noise["noise_raw"], errors="coerce")
     log("INFO", f"  Loaded {len(df_noise)} noise values from raw_signals")
 
@@ -544,8 +515,8 @@ if not impervious_already_done:
             "signal_name": "impervious_pct",
             "data_source": "nlcd_impervious",
             "data_vintage": 2021,
-            "raw_value": float(row["impervious_raw"]),
-            "unit": "percent",
+            "signal_value": float(row["impervious_raw"]),
+            "units": "percent",
         }
         try:
             supabase.table("raw_signals").upsert(
@@ -564,11 +535,11 @@ if not impervious_already_done:
 else:
     log("INFO", "  Loading cached impervious data from raw_signals...")
     imp_result = supabase.table("raw_signals") \
-        .select("zipcode, raw_value") \
+        .select("zipcode, signal_value") \
         .eq("data_source", "nlcd_impervious") \
         .execute()
     df_impervious = pd.DataFrame(imp_result.data)
-    df_impervious = df_impervious.rename(columns={"raw_value": "impervious_raw"})
+    df_impervious = df_impervious.rename(columns={"signal_value": "impervious_raw"})
     df_impervious["impervious_raw"] = pd.to_numeric(df_impervious["impervious_raw"], errors="coerce")
     log("INFO", f"  Loaded {len(df_impervious)} impervious values from raw_signals")
 

@@ -333,35 +333,6 @@ if not viirs_already_done:
     log("INFO", f"  VIIRS processing complete: {df_viirs['light_pollution_raw'].notna().sum()} ZIPs with data")
     log("INFO", f"  Range: {df_viirs['light_pollution_raw'].min():.2f} – {df_viirs['light_pollution_raw'].max():.2f} nW/cm²/sr")
 
-    # ── Schema cache warm-up for raw_signals ─────────────────
-    # PostgREST may have a stale schema cache after long raster processing.
-    # Reinitialize client and confirm raw_signals is visible before writing.
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-    log("INFO", "  Reinitialized Supabase client for raw_signals writes")
-
-    MAX_RETRIES = 5
-    RETRY_DELAY = 3
-
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            test = supabase.table("raw_signals").select("zipcode").limit(1).execute()
-            log("PASS", f"  raw_signals schema cache warm-up succeeded on attempt {attempt}")
-            break
-        except Exception as e:
-            log("WARN", f"  raw_signals warm-up attempt {attempt}/{MAX_RETRIES} failed: {e}")
-            if attempt < MAX_RETRIES:
-                time.sleep(RETRY_DELAY)
-    else:
-        raise RuntimeError(
-            "\n" + "!" * 62 + "\n"
-            "  PostgREST cannot see the raw_signals table after 5 attempts.\n"
-            "  This is a schema cache issue, not a missing table.\n\n"
-            "  FIX: Open Supabase SQL Editor and run:\n"
-            "    NOTIFY pgrst, 'reload schema';\n\n"
-            "  Wait 10 seconds, then re-run this cell.\n"
-            + "!" * 62 + "\n"
-        )
-
     # ── Write to raw_signals for potential reuse ─────────────
     log("INFO", "  Writing VIIRS values to raw_signals table...")
     viirs_failed = []
@@ -371,8 +342,8 @@ if not viirs_already_done:
             "signal_name": "viirs_radiance",
             "data_source": "nasa_viirs",
             "data_vintage": 2024,
-            "raw_value": float(row["light_pollution_raw"]),
-            "unit": "nW/cm2/sr",
+            "signal_value": float(row["light_pollution_raw"]),
+            "units": "nW/cm2/sr",
         }
         try:
             supabase.table("raw_signals").upsert(
@@ -392,11 +363,11 @@ else:
     # Load from raw_signals
     log("INFO", "  Loading cached VIIRS data from raw_signals...")
     viirs_result = supabase.table("raw_signals") \
-        .select("zipcode, raw_value") \
+        .select("zipcode, signal_value") \
         .eq("data_source", "nasa_viirs") \
         .execute()
     df_viirs = pd.DataFrame(viirs_result.data)
-    df_viirs = df_viirs.rename(columns={"raw_value": "light_pollution_raw"})
+    df_viirs = df_viirs.rename(columns={"signal_value": "light_pollution_raw"})
     df_viirs["light_pollution_raw"] = pd.to_numeric(df_viirs["light_pollution_raw"], errors="coerce")
     log("INFO", f"  Loaded {len(df_viirs)} VIIRS values from raw_signals")
 
