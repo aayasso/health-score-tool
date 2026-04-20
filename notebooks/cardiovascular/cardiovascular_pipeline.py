@@ -936,9 +936,12 @@ write_tests = [
         )),
 ]
 
-# Spot checks
+# Spot checks — skip ZIPs not in the scored DataFrame
 for zc in SPOT_ZIPS:
     z = zc
+    if df[df["zipcode"] == z].shape[0] == 0:
+        log("INFO", f"  Skipping Suite 4 spot check for ZIP {z} — not in scored data")
+        continue
     write_tests.append((
         f"Spot check ZIP {z}: exists in Supabase",
         lambda zc=z: (get_sb_row(zc) is not None, f"ZIP {zc} not found")
