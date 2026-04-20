@@ -830,93 +830,7 @@ require_all_pass("FOOD ACCESS — SCORING", suite3_passed)
 
 
 # %% [markdown]
-# ## 8 · Claude API Interpretations
-#
-# **If this section fails:** Stop, copy the error, bring it to Claude Code. Common issues:
-# missing ANTHROPIC_API_KEY in Colab secrets, rate limits (429), or model string changes.
-
-# %%
-log("START", "Generating Claude API interpretations for all ZIPs")
-
-import anthropic
-
-client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
-
-def generate_food_interpretation(zipcode: str, composite_score: float,
-                                  letter_grade: str, components: dict) -> str:
-    """
-    Generate a plain-language food access interpretation.
-    components: dict of {label: normalized_score} — qualitative labels only, no weights.
-    Framing: proximity to fresh food, grocery availability, diet-related health outcomes.
-    """
-    prompt = f"""You are a public health analyst writing a plain-language summary for residents and
-real estate professionals. Write 2-3 sentences interpreting this neighborhood's food access score.
-
-ZIP Code: {zipcode}
-Score: {composite_score:.1f}/100 (Grade: {letter_grade})
-Component signals: {components}
-
-Rules:
-- Be specific, factual, and actionable
-- Do not use jargon
-- Do not mention scores, percentages, or numbers from the components
-- Do not reveal how components are weighted or combined
-- Do not say "based on our methodology" or any similar phrase
-- Frame supermarket access as proximity to fresh, affordable food options
-- Frame grocery density as the availability of grocery stores in the area
-- Frame health outcomes as diet-related health conditions in the community"""
-
-    # Using Sonnet for cost/speed — 600 interpretation calls at ~$0.01 each vs ~$0.10 for Opus.
-    # Stress pipeline (Tool 3) used the same model. Quality is sufficient for 2-3 sentence summaries.
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=300,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response.content[0].text
-
-
-# %%
-# Generate interpretations in batches with rate limiting
-INTERPRETATION_BATCH_DELAY = 0.3  # seconds between API calls
-
-interpretations = {}
-failed_interps = []
-
-for i, (idx, row) in enumerate(df.iterrows()):
-    zc = row["zipcode"]
-    components = {
-        "Supermarket Proximity": row.get("low_access_normalized", 0),
-        "Grocery Store Availability": row.get("grocery_density_normalized", 0),
-        "Diet-Related Health": row.get("health_outcome_normalized", 0),
-    }
-
-    try:
-        interp = generate_food_interpretation(
-            zc, row["composite_score"], row["letter_grade"], components
-        )
-        interpretations[zc] = interp
-    except Exception as e:
-        log("ERROR", f"  Interpretation failed for ZIP {zc}: {e}")
-        failed_interps.append(zc)
-        interpretations[zc] = ""
-
-    # Progress logging every 50 ZIPs
-    if (i + 1) % 50 == 0 or i == len(df) - 1:
-        log("INFO", f"  Interpreted {len(interpretations)}/{len(df)} ZIPs")
-
-    time.sleep(INTERPRETATION_BATCH_DELAY)
-
-df["interpretation"] = df["zipcode"].map(interpretations)
-
-if failed_interps:
-    log("WARN", f"{len(failed_interps)} ZIPs failed interpretation: {failed_interps[:10]}")
-else:
-    log("PASS", "All interpretations generated successfully")
-
-
-# %% [markdown]
-# ## 9 · Supabase Upsert
+# ## 8 · Supabase Upsert
 #
 # **If this section fails:** Stop, copy the error, bring it to Claude Code. Common issues:
 # column name mismatch between local dict keys and Supabase schema, or missing UNIQUE constraint.
@@ -972,7 +886,6 @@ for _, row in df.iterrows():
         "health_outcome_normalized": float(row["health_outcome_normalized"]) if pd.notna(row["health_outcome_normalized"]) else None,
         "composite_score": float(row["composite_score"]),
         "letter_grade": row["letter_grade"],
-        "interpretation": row.get("interpretation", ""),
         "score_date": str(date.today()),
     }
 

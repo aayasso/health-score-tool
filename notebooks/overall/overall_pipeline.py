@@ -281,93 +281,7 @@ require_all_pass("OVERALL — SCORING", suite2_passed)
 
 
 # %% [markdown]
-# ## 6 · Claude API Interpretations
-#
-# **If this section fails:** Stop, copy the error, bring it to Claude Code. Common issues:
-# missing ANTHROPIC_API_KEY in Colab secrets, rate limits (429), or model string changes.
-
-# %%
-log("START", "Generating Claude API interpretations for all ZIPs")
-
-import anthropic
-
-client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
-
-def generate_overall_interpretation(zipcode: str, composite_score: float,
-                                     letter_grade: str, sub_scores: dict) -> str:
-    """
-    Generate a plain-language overall health environment interpretation.
-    sub_scores: dict of {dimension_label: score} — qualitative labels only, no weights.
-    """
-    prompt = f"""You are a public health analyst writing a plain-language summary for residents and
-real estate professionals. Write 2-3 sentences interpreting this neighborhood's overall health
-environment score, which combines five dimensions: respiratory health, cardiovascular health,
-stress and sensory environment, food access, and heat resilience.
-
-ZIP Code: {zipcode}
-Overall Score: {composite_score:.1f}/100 (Grade: {letter_grade})
-Dimension scores: {sub_scores}
-
-Rules:
-- Be specific, factual, and actionable
-- Do not use jargon
-- Do not mention exact scores or numbers from the dimensions
-- Do not reveal how dimensions are weighted or combined
-- Do not say "based on our methodology" or any similar phrase
-- Highlight the strongest and weakest dimensions
-- Frame in terms of livability and long-term health outcomes"""
-
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=300,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response.content[0].text
-
-
-# %%
-# Generate interpretations in batches with rate limiting
-INTERPRETATION_BATCH_DELAY = 0.3  # seconds between API calls
-
-interpretations = {}
-failed_interps = []
-
-for i, (idx, row) in enumerate(df.iterrows()):
-    zc = row["zipcode"]
-    sub_scores = {
-        "Respiratory": row.get("respiratory_score", 0),
-        "Cardiovascular": row.get("cardiovascular_score", 0),
-        "Stress & Sensory": row.get("stress_score", 0),
-        "Food Access": row.get("food_access_score", 0),
-        "Heat Resilience": row.get("heat_score", 0),
-    }
-
-    try:
-        interp = generate_overall_interpretation(
-            zc, row["composite_score"], row["letter_grade"], sub_scores
-        )
-        interpretations[zc] = interp
-    except Exception as e:
-        log("ERROR", f"  Interpretation failed for ZIP {zc}: {e}")
-        failed_interps.append(zc)
-        interpretations[zc] = ""
-
-    # Progress logging every 50 ZIPs
-    if (i + 1) % 50 == 0 or i == len(df) - 1:
-        log("INFO", f"  Interpreted {len(interpretations)}/{len(df)} ZIPs")
-
-    time.sleep(INTERPRETATION_BATCH_DELAY)
-
-df["interpretation"] = df["zipcode"].map(interpretations)
-
-if failed_interps:
-    log("WARN", f"{len(failed_interps)} ZIPs failed interpretation: {failed_interps[:10]}")
-else:
-    log("PASS", "All interpretations generated successfully")
-
-
-# %% [markdown]
-# ## 7 · Supabase Upsert
+# ## 6 · Supabase Upsert
 #
 # **If this section fails:** Stop, copy the error, bring it to Claude Code. Common issues:
 # column name mismatch between local dict keys and Supabase schema, or missing UNIQUE constraint.
@@ -418,7 +332,6 @@ for _, row in df.iterrows():
         "heat_score": float(row["heat_score"]) if pd.notna(row["heat_score"]) else None,
         "composite_score": float(row["composite_score"]),
         "letter_grade": row["letter_grade"],
-        "interpretation": row.get("interpretation", ""),
         "score_date": str(date.today()),
     }
 
