@@ -47,6 +47,33 @@ def log(level: str, msg: str):
     print(f"[{ts}] [{level:>5}] {msg}")
 
 
+def upsert_with_retry(supabase, table_name, record, on_conflict="zipcode",
+                      max_attempts=3, backoff_base=1):
+    """
+    Upsert a single record with retry on transient HTTP errors (502/503/504).
+    Exponential backoff: 1s, 2s, 4s. Raises on non-retryable or final failure.
+    """
+    for attempt in range(1, max_attempts + 1):
+        try:
+            supabase.table(table_name).upsert(
+                record, on_conflict=on_conflict
+            ).execute()
+            return
+        except Exception as e:
+            err_str = str(e)
+            retryable = any(code in err_str for code in ["502", "503", "504"]) \
+                        or "ConnectionError" in type(e).__name__ \
+                        or "ConnectionReset" in err_str \
+                        or "RemoteDisconnected" in err_str
+            if retryable and attempt < max_attempts:
+                wait = backoff_base * (2 ** (attempt - 1))
+                log("WARN", f"Retry {attempt}/{max_attempts} for ZIP {record.get('zipcode')} "
+                            f"after {type(e).__name__}: {err_str[:100]}... waiting {wait}s")
+                time.sleep(wait)
+            else:
+                raise
+
+
 # ── Test runner ───────────────────────────────────────────────
 def run_tests(suite_name: str, tests: list) -> int:
     log("TEST", f"═══ {suite_name} ═══")
@@ -336,9 +363,7 @@ for _, row in df.iterrows():
     }
 
     try:
-        supabase.table("overall_scores").upsert(
-            record, on_conflict="zipcode"
-        ).execute()
+        upsert_with_retry(supabase, "overall_scores", record)
     except Exception as e:
         log("ERROR", f"Failed to write ZIP {row['zipcode']}: {e}")
         failed_zips.append(row["zipcode"])

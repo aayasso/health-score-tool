@@ -58,6 +58,34 @@ def log(level: str, message: str):
     icon = icons.get(level, "   ")
     print(f"[{timestamp}] {icon} [{level}] {message}")
 
+
+def upsert_with_retry(supabase, table_name, record, on_conflict="zipcode",
+                      max_attempts=3, backoff_base=1):
+    """
+    Upsert a single record with retry on transient HTTP errors (502/503/504).
+    Exponential backoff: 1s, 2s, 4s. Raises on non-retryable or final failure.
+    """
+    for attempt in range(1, max_attempts + 1):
+        try:
+            supabase.table(table_name).upsert(
+                record, on_conflict=on_conflict
+            ).execute()
+            return
+        except Exception as e:
+            err_str = str(e)
+            retryable = any(code in err_str for code in ["502", "503", "504"]) \
+                        or "ConnectionError" in type(e).__name__ \
+                        or "ConnectionReset" in err_str \
+                        or "RemoteDisconnected" in err_str
+            if retryable and attempt < max_attempts:
+                wait = backoff_base * (2 ** (attempt - 1))
+                log("WARN", f"Retry {attempt}/{max_attempts} for ZIP {record.get('zipcode')} "
+                            f"after {type(e).__name__}: {err_str[:100]}... waiting {wait}s")
+                time.sleep(wait)
+            else:
+                raise
+
+
 # ── Test Runner ─────────��────────────────────────────────────
 def run_tests(suite_name: str, tests: list) -> bool:
     """Run (test_name, test_fn) tuples. Each test_fn returns (passed, detail)."""
@@ -398,10 +426,8 @@ for _, row in df_air_quality.dropna(subset=["air_quality_raw"]).iterrows():
         "units": "index_0_100",
     }
     try:
-        supabase.table("raw_signals").upsert(
-            record,
-            on_conflict="zipcode,signal_name,data_source,data_vintage"
-        ).execute()
+        upsert_with_retry(supabase, "raw_signals", record,
+                          on_conflict="zipcode,signal_name,data_source,data_vintage")
     except Exception:
         aq_failed.append(row["zipcode"])
 
@@ -541,10 +567,8 @@ for _, row in df_burden.dropna(subset=["environmental_burden_raw"]).iterrows():
         "units": "percentile_avg",
     }
     try:
-        supabase.table("raw_signals").upsert(
-            record,
-            on_conflict="zipcode,signal_name,data_source,data_vintage"
-        ).execute()
+        upsert_with_retry(supabase, "raw_signals", record,
+                          on_conflict="zipcode,signal_name,data_source,data_vintage")
     except Exception:
         ej_failed.append(row["zipcode"])
 
@@ -742,10 +766,8 @@ for _, row in df_resp_cdc.dropna(subset=["health_outcomes_raw"]).iterrows():
                 "units": "percent",
             }
             try:
-                supabase.table("raw_signals").upsert(
-                    record,
-                    on_conflict="zipcode,signal_name,data_source,data_vintage"
-                ).execute()
+                upsert_with_retry(supabase, "raw_signals", record,
+                                  on_conflict="zipcode,signal_name,data_source,data_vintage")
             except Exception:
                 ho_failed.append(row["zipcode"])
 
@@ -1166,9 +1188,7 @@ for _, row in df.iterrows():
     }
 
     try:
-        supabase.table("respiratory_scores").upsert(
-            record, on_conflict="zipcode"
-        ).execute()
+        upsert_with_retry(supabase, "respiratory_scores", record)
     except Exception as e:
         log("ERROR", f"Failed to write ZIP {row['zipcode']}: {e}")
         failed_zips.append(row["zipcode"])
