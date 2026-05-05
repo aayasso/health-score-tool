@@ -9,6 +9,8 @@ const corsHeaders = {
 const htmlHeaders = {
   ...corsHeaders,
   "Content-Type": "text/html; charset=utf-8",
+  "X-Frame-Options": "ALLOWALL",
+  "Content-Security-Policy": "frame-ancestors *",
 };
 
 const gradeColors: Record<string, string> = {
