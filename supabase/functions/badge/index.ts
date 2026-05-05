@@ -4,6 +4,10 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
+};
+
+const htmlHeaders = {
+  ...corsHeaders,
   "Content-Type": "text/html; charset=utf-8",
 };
 
@@ -139,7 +143,7 @@ Deno.serve(async (req) => {
   if (!zip || !/^\d{5}$/.test(zip)) {
     return new Response(renderBadge(zip ?? "00000", null, null), {
       status: 200,
-      headers: corsHeaders,
+      headers: { ...htmlHeaders },
     });
   }
 
@@ -159,19 +163,19 @@ Deno.serve(async (req) => {
     if (!data) {
       return new Response(renderBadge(zip, null, null), {
         status: 200,
-        headers: corsHeaders,
+        headers: { ...htmlHeaders },
       });
     }
 
     return new Response(
       renderBadge(zip, data.composite_score, data.letter_grade),
-      { status: 200, headers: corsHeaders }
+      { status: 200, headers: { ...htmlHeaders } }
     );
   } catch (err) {
     console.error("badge error:", err);
     return new Response(renderBadge(zip, null, null), {
       status: 200,
-      headers: corsHeaders,
+      headers: { ...htmlHeaders },
     });
   }
 });
