@@ -204,3 +204,33 @@ Conclusion: all 5 pipelines normalized over the full 8-metro dataset. All-metros
 **Status:** Prompt and logic correct, offline-verified. Function is committed but not deployed. D2 fixes auth, D3 deploys and regenerates.
 
 **Files committed:** `supabase/functions/generate-interpretation/index.ts`
+
+---
+
+### 2026-05-24 — Task D2: Auth decision for generate-interpretation (documentation only)
+
+**Branch:** `gap-closure/a1-enable-rls`
+
+**Problem:** The generate-interpretation edge function has `verify_jwt = true`. The Lovable frontend sends the publishable key (not a valid JWT) as the Bearer token, causing a 401 for any ZIP without a cached interpretation.
+
+**Decision: The 401 is correct behavior, not a bug to fix.**
+
+The function calls the Anthropic API (paid per call) and writes to the DB. Any public-facing endpoint that triggers paid API calls is an abuse vector. Three options were evaluated:
+
+| Option | Abuse risk | Recommendation |
+|---|---|---|
+| A: verify_jwt=false + self-validate | HIGH — publishable key is public, anyone can curl | Rejected |
+| B: Send anon JWT, keep verify_jwt=true | MEDIUM — anon key equally public | Rejected |
+| C: Batch-only, service-role invocation | NONE — service role key is server-side only | **Adopted** |
+
+**Option C rationale:** D3 pre-generates all in-scope interpretations in batch using the service role key. The frontend only reads cached interpretations from the DB. Live generation from the frontend is unnecessary attack surface with zero user benefit.
+
+**Conditional-call finding:** The Lovable frontend checks `overall_scores.interpretation` before calling the function. If non-null (cached), it displays immediately — the edge function is never called. After D3 fills all in-scope caches, the 401 path is unreachable for shipping ZIPs. For expansion ZIPs (interpretation = null), the call fires but correctly 401s — those ZIPs are hidden in Phase E.
+
+**Auth posture:** `verify_jwt = true` stays in `supabase/config.toml`. No code or config changes. The function is invocable only with `Authorization: Bearer <SERVICE_ROLE_KEY>` (D3 batch path).
+
+**Phase E note:** The Lovable frontend currently reads interpretations from `overall_scores.interpretation`. D1 moved generation to per-dimension tables (`[dimension]_scores.interpretation`). Phase E's frontend rebuild must switch interpretation reads from `overall_scores` to the per-dimension tables.
+
+**What changed:** Nothing. D2 is a security decision + documentation, not a code change.
+
+**Files committed:** `GAP_CLOSURE_LOG.md` (this entry only)
