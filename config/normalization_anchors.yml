@@ -1,0 +1,43 @@
+# normalization_anchors.yml — PROPRIETARY (do not expose)
+# Min/max anchors that produced the current live scores.
+# Generated: 2026-05-24
+# Method: back-computed from stored raw values in Supabase, verified against
+#         stored normalized values (36/36 checks pass to 5 decimal places).
+# Scope: all 8 metros (~974 ZIPs). Dual-scope check confirmed respiratory
+#        normalization used all-metros mins (air_quality_min=33.58 all vs
+#        36.34 in-scope; health_outcomes_min=4.6 all vs 4.95 in-scope).
+# Formula:
+#   inverted:  normalized = (1 - (raw - min) / (max - min)) * 100
+#   direct:    normalized = (raw - min) / (max - min) * 100
+
+version: 1
+scope: all_8_metros
+generated_from: stored_raw_values
+
+respiratory:
+  air_quality:          { min: 33.57556724660215,  max: 80.82797463699876,  invert: true  }
+  environmental_burden: { min: 0.0,                max: 95.86562967181605,  invert: true  }
+  green_cover:          { min: 0.0,                max: 66.1165,            invert: false }
+  health_outcomes:      { min: 4.6,                max: 13.75,              invert: true  }
+
+cardiovascular:
+  physical_inactivity:  { min: 8.0,                max: 44.5,               invert: true }
+  chd:                  { min: 0.4,                max: 17.1,               invert: true }
+  noise:                { min: 46.0280303955078,   max: 63.5624498555841,   invert: true }
+  impervious:           { min: 0.125274067285801,  max: 92.2595596755504,   invert: true }
+
+stress:
+  noise:                { min: 46.0280303955078,   max: 63.5624498555841,   invert: true  }
+  light_pollution:      { min: 0.01741519782061134, max: 274.17681884765625, invert: true  }
+  depression:           { min: 8.8,                max: 31.6,               invert: true  }
+  mental_health:        { min: 7.7,                max: 33.4,               invert: true  }
+
+food_access:
+  low_access:           { min: 0.0,                max: 100.00000161765945, invert: true  }
+  grocery_density:      { min: 0.07428494840860367, max: 0.2804694175720215, invert: false }
+  health_outcome:       { min: 7.6000000000000005, max: 39.400000000000006, invert: true  }
+
+heat:
+  impervious:           { min: 0.125274067285801,  max: 92.2595596755504,   invert: true  }
+  tree_canopy:          { min: 0.0,                max: 78.852904202214,    invert: false }
+  health_outcome:       { min: 4.6,                max: 13.75,              invert: true  }

@@ -94,3 +94,32 @@ Execution audit trail for GAP_CLOSURE_PLAN.md. Each entry appended after a task 
 **Lesson learned:** Supabase SQL Editor displays "Success. No rows returned" for UPDATE statements that succeed — this means no result set to display, NOT 0 rows affected. UPDATEs do not return rows unless you add `RETURNING *`.
 
 **Files committed:** `notebooks/heat/heat_pipeline.py`, `notebooks/food/food_pipeline.py`, `backups/heat_scores_before_b1.csv`, `backups/food_access_scores_before_b1.csv`
+
+---
+
+### 2026-05-24 — Task B2: Store normalization anchors
+
+**Branch:** `gap-closure/a1-enable-rls`
+
+**Problem:** Audit finding #9 — min/max normalization anchors computed at runtime (`df[col].min()` / `df[col].max()`) in all 5 pipelines, stored nowhere. Scores not reproducible from stored data alone; any future re-run or new metro silently shifts every existing score.
+
+**Resolution:** Back-computed min/max anchors from stored raw values in Supabase and persisted them in `config/normalization_anchors.yml` (version-controlled, marked proprietary). No scores changed.
+
+**Storage choice:** Versioned file in repo (not a Supabase table). Rationale: reproducibility metadata belongs in git where changes are diffable; no DB schema or RLS overhead for data that changes only on pipeline re-runs.
+
+**Scope determination (dual-scope check):** Computed respiratory anchors two ways — all 8 metros vs 4 in-scope metros only. Results differ:
+
+| Component | All-metros min | In-scope min | Match? |
+|---|---|---|---|
+| air_quality | 33.58 | 36.34 | NO — expansion ZIP holds true min |
+| health_outcomes | 4.60 | 4.95 | NO — expansion ZIP holds true min |
+| environmental_burden | 0.0 | 0.0 | YES |
+| green_cover | 0.0 | 0.0 | YES |
+
+Conclusion: all 5 pipelines normalized over the full 8-metro dataset. All-metros anchors used.
+
+**Verification (36/36 checks pass):** For each of the 18 components across 2 ZIPs (15213 Pittsburgh, 90012 Los Angeles), re-derived normalized values from stored raw values using captured anchors. All matched stored normalized values to 5 decimal places.
+
+**18 components captured:** respiratory (4), cardiovascular (4), stress (4), food_access (3), heat (3).
+
+**Files committed:** `config/normalization_anchors.yml`
