@@ -32,3 +32,27 @@ Execution audit trail for GAP_CLOSURE_PLAN.md. Each entry appended after a task 
 - `CREATE POLICY "anon_select" ON [7 tables] FOR SELECT TO anon USING (true);`
 
 **Files committed:** `supabase/migrations/20260524_enable_rls.sql`
+
+---
+
+### 2026-05-24 — Task A2: Confirm score_config and dead tables locked
+
+**Branch:** `gap-closure/a1-enable-rls`
+
+**What changed:** Enabled RLS (default deny, no anon policy) on 2 legacy tables missed by A1: `composite_scores` (600 rows, stale respiratory data with wrong grade scale) and `interpretations` (600 rows, stale respiratory interpretations with score leaks). Neither is queried by the live frontend (confirmed Pass 2: zero bundle references). Also confirmed A1's locks on `score_config` and `raw_signals` remain in effect.
+
+**BEFORE → AFTER verification:**
+
+| Table | BEFORE | AFTER | Verdict |
+|---|---|---|---|
+| `score_config` | `[]` (locked by A1) | `[]` | PASS (still blocked) |
+| `raw_signals` | `[]` (locked by A1) | `[]` | PASS (still blocked) |
+| `composite_scores` | 200 + stale data exposed | `[]` | PASS (newly blocked) |
+| `interpretations` | 200 + stale data exposed | `[]` | PASS (newly blocked) |
+| `respiratory_scores` (sanity check) | 200 + data | 200 + data | PASS (no collateral damage) |
+
+**SQL applied (via Supabase SQL Editor):**
+- `ALTER TABLE composite_scores ENABLE ROW LEVEL SECURITY;`
+- `ALTER TABLE interpretations ENABLE ROW LEVEL SECURITY;`
+
+**Files committed:** `supabase/migrations/20260524_lock_legacy_tables.sql`
