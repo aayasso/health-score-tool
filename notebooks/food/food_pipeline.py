@@ -168,7 +168,7 @@ log("INFO", f"Loaded {len(ALL_ZIPS)} ZIPs across {df_zips['metro'].nunique()} me
 log("INFO", f"Metro counts: {df_zips['metro'].value_counts().to_dict()}")
 
 # ── Component Weights (proprietary — do not expose) ─────────
-WEIGHTS = [0.35, 0.35, 0.30]
+WEIGHTS = [0.40, 0.35, 0.25]
 WEIGHT_LABELS = [
     "low_access",
     "grocery_density",

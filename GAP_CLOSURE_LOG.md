@@ -56,3 +56,41 @@ Execution audit trail for GAP_CLOSURE_PLAN.md. Each entry appended after a task 
 - `ALTER TABLE interpretations ENABLE ROW LEVEL SECURITY;`
 
 **Files committed:** `supabase/migrations/20260524_lock_legacy_tables.sql`
+
+---
+
+### 2026-05-24 — Task B1: Resolve health-outcomes weight inconsistency
+
+**Branch:** `gap-closure/a1-enable-rls`
+
+**Problem:** Health-outcomes components weighted inconsistently across dimensions — 35% in heat, 30% in food — with no documented rationale. Audit flagged this as the one real methodology inconsistency a reviewer would find.
+
+**Resolution:** Reduced health-outcomes weight to a consistent 25% across both affected dimensions. Redistributed weight to physical/environmental components (the directly measurable signals).
+
+**Weight changes (proprietary — do not expose exact values outside this log):**
+
+| Dimension | Component | Old Weight | New Weight |
+|---|---|---|---|
+| Heat | impervious | 0.30 | 0.35 |
+| Heat | tree_canopy | 0.35 | 0.40 |
+| Heat | health_outcome | 0.35 | 0.25 |
+| Food | low_access | 0.35 | 0.40 |
+| Food | grocery_density | 0.35 | 0.35 |
+| Food | health_outcome | 0.30 | 0.25 |
+
+**Scope:** In-scope metros only (Pittsburgh, Los Angeles, Phoenix, Charlotte). Expansion metros (Chicago, Houston, Atlanta, Denver) were NOT re-scored.
+
+**BEFORE snapshots:** `backups/heat_scores_before_b1.csv`, `backups/food_access_scores_before_b1.csv`
+
+**Verification (all 4 queries pass):**
+
+| Query | Test | Result |
+|---|---|---|
+| Q1 | Reproducibility trace — stored composite = weighted sum of stored normalized values (heat + food, 3 in-scope ZIPs) | PASS (matched to 5 decimals) |
+| Q2 | Respiratory / cardiovascular / stress composites unchanged | PASS |
+| Q3 | Grade reconciliation — every heat + food row's letter_grade matches grade implied by composite_score | PASS (0 mismatches) |
+| Q4 | Expansion metros untouched — stored composites match old-weight recalculation | PASS |
+
+**Lesson learned:** Supabase SQL Editor displays "Success. No rows returned" for UPDATE statements that succeed — this means no result set to display, NOT 0 rows affected. UPDATEs do not return rows unless you add `RETURNING *`.
+
+**Files committed:** `notebooks/heat/heat_pipeline.py`, `notebooks/food/food_pipeline.py`, `backups/heat_scores_before_b1.csv`, `backups/food_access_scores_before_b1.csv`
