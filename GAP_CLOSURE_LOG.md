@@ -166,3 +166,41 @@ Conclusion: all 5 pipelines normalized over the full 8-metro dataset. All-metros
 **What changed:** `letter_grade` column in 5 dimension tables (in-scope rows only). No `composite_score` values changed. No expansion data changed. No pipeline code changed.
 
 **Files committed:** `config/grade_thresholds.yml`
+
+---
+
+### 2026-05-24 — Task D1: Fix interpretation generation prompt (code only, not deployed)
+
+**Branch:** `gap-closure/a1-enable-rls`
+
+**Problem:** Pass 2 audit found the generate-interpretation edge function leaks exact scores (79% overall, 48% stress, 41% food) and emits markdown headers (100% of heat interpretations). Root cause: the prompt feeds `composite_score` and all 5 dimension scores as raw numbers to Claude, then instructs "do not mention exact scores" — the model ignores this ~80% of the time.
+
+**Resolution:** Rewrote `supabase/functions/generate-interpretation/index.ts` with two structural changes:
+
+1. **No numbers in input:** `composite_score` is never read from the DB and never enters the prompt. Component normalized values are converted to qualitative tercile descriptions (low/moderate/high) before reaching Claude. No numbers = no leaks.
+2. **Per-dimension architecture:** Function now accepts `{ zipcode, dimension }` and generates one interpretation per dimension (not an overall interpretation). Aligns with Phase E (five independent dimensions, no overall composite).
+
+**Tercile mapping:** Normalized values mapped to qualitative descriptions using boundaries 0–33.33 (low), 33.34–66.66 (moderate), 67–100 (high). Normalization already inverts bad-is-high components, so higher normalized = better for all. 18 component descriptors hardcoded in the function (3–4 per dimension × 3 terciles each).
+
+**Prompt changes:**
+- Grade framed as relative standing: "reflects how this ZIP code ranks relative to other neighborhoods in the covered metro areas for this specific dimension"
+- Explicit rules: no markdown, no numbers, no cross-dimension comparison, no absolute/national health claims
+- Component conditions described qualitatively, not numerically
+
+**Verification (offline, via claude.ai — function not deployed):**
+
+| Test ZIP | Dimension | Grade | Result |
+|---|---|---|---|
+| 28078 Charlotte | Heat | A | PASS — clean prose, zero numbers, zero markdown, relative framing |
+| 15213 Pittsburgh | Heat | C | PASS — clean prose, zero numbers, zero markdown, relative framing |
+| 85051 Phoenix | Heat | F | PASS — clean prose, zero numbers, zero markdown, relative framing, no absolute-health overclaim |
+
+**What this task does NOT do:**
+- Does NOT fix the 401 auth gate (function still unreachable via publishable key — that's D2)
+- Does NOT deploy the function (that's D2/D3)
+- Does NOT regenerate any stored interpretations (that's D3)
+- Does NOT modify any database data
+
+**Status:** Prompt and logic correct, offline-verified. Function is committed but not deployed. D2 fixes auth, D3 deploys and regenerates.
+
+**Files committed:** `supabase/functions/generate-interpretation/index.ts`
