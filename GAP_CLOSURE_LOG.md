@@ -123,3 +123,46 @@ Conclusion: all 5 pipelines normalized over the full 8-metro dataset. All-metros
 **18 components captured:** respiratory (4), cardiovascular (4), stress (4), food_access (3), heat (3).
 
 **Files committed:** `config/normalization_anchors.yml`
+
+---
+
+### 2026-05-24 — Task C1: Percentile-based grade thresholds
+
+**Branch:** `gap-closure/a1-enable-rls`
+
+**Problem:** Fixed grade scale (A≥80/B≥65/C≥50/D≥35/F<35) produced badly skewed distributions — zero or near-zero A's in most dimensions, heavy F concentration in respiratory and heat. Scale was arbitrary and indefensible.
+
+**Resolution:** Replaced with population-percentile thresholds (SVI/CalEnviroScreen precedent). Grades computed per-dimension over in-scope metros only. Distribution: A ≥ p90 (top 10%), B = p70–p90 (20%), C = p30–p70 (40%), D = p10–p30 (20%), F < p10 (bottom 10%).
+
+**Scope:** 4 in-scope metros (Pittsburgh, Los Angeles, Phoenix, Charlotte), n=574 per dimension. Expansion metros excluded from percentile calculation and untouched.
+
+**Cutoffs persisted in:** `config/grade_thresholds.yml` (proprietary, version-controlled).
+
+**BEFORE snapshot approach:** Added `letter_grade_pre_c1` column to all 5 dimension tables, populated with pre-C1 letter_grade for in-scope rows only. Expansion rows have NULL in this column (proving they were never touched). Rollback is one statement per table: `UPDATE SET letter_grade = letter_grade_pre_c1 WHERE letter_grade_pre_c1 IS NOT NULL`. Columns kept as provenance until Phase E cleanup.
+
+**BEFORE distribution (fixed scale):**
+
+| Dimension | A | B | C | D | F |
+|---|---|---|---|---|---|
+| Cardiovascular | 2 | 227 | 283 | 60 | 2 |
+| Food Access | 0 | 109 | 165 | 160 | 140 |
+| Heat | 1 | 47 | 118 | 187 | 221 |
+| Respiratory | 0 | 13 | 120 | 174 | 267 |
+| Stress | 6 | 340 | 218 | 10 | 0 |
+
+**AFTER distribution (percentile-based):**
+
+| Dimension | A | B | C | D | F | % |
+|---|---|---|---|---|---|---|
+| All 5 (identical) | 58 | 114 | 230 | 114 | 58 | 10.1/19.9/40.1/19.9/10.1 |
+
+**Verification:**
+
+| Test | Result |
+|---|---|
+| V1 — Grade reconciliation (every in-scope grade matches percentile cutoffs) | PASS (0 mismatches) |
+| V2A — Expansion `letter_grade_pre_c1` is NULL everywhere | PASS (0 rows, expansion never touched) |
+
+**What changed:** `letter_grade` column in 5 dimension tables (in-scope rows only). No `composite_score` values changed. No expansion data changed. No pipeline code changed.
+
+**Files committed:** `config/grade_thresholds.yml`

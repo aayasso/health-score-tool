@@ -1,0 +1,19 @@
+# grade_thresholds.yml — PROPRIETARY (do not expose)
+# Percentile-based grade cutoffs per dimension.
+# Generated: 2026-05-24
+# Method: PERCENTILE_CONT on composite_score, in-scope metros only.
+# Scope: Pittsburgh, Los Angeles, Phoenix, Charlotte (n=574 per dimension).
+# Distribution: A >= p90 (top 10%), B = p70–p90, C = p30–p70, D = p10–p30, F < p10.
+# Replaces fixed scale: A>=80 / B>=65 / C>=50 / D>=35 / F<35.
+# Precedent: CDC/ATSDR SVI, CalEnviroScreen (percentile/rank-based classification).
+
+version: 1
+scope: in_scope_4_metros
+method: percentile_cont
+distribution: { A: ">=p90", B: "p70-p90", C: "p30-p70", D: "p10-p30", F: "<p10" }
+
+cardiovascular: { p10: 49.5636951822306, p30: 57.5782895167007, p70: 67.4284708921105, p90: 72.6964101324971 }
+food_access:    { p10: 28.9943027869559, p30: 37.7360499505009, p70: 58.8606979172809, p90: 69.4997843068710 }
+heat:           { p10: 25.6293127052429, p30: 32.5902491522296, p70: 49.7260530608891, p90: 63.3167621611031 }
+respiratory:    { p10: 26.6618652169018, p30: 31.3810198027609, p70: 43.8467401305731, p90: 58.8645676868697 }
+stress:         { p10: 58.6626243807652, p30: 63.3267492630612, p70: 69.5324863726886, p90: 73.4352283430636 }
