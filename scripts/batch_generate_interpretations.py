@@ -17,6 +17,10 @@ import re
 import anthropic
 from supabase import create_client
 
+# Add project root to path for shared config
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from scripts.lib.metros import pilot_metros
+
 # ── Dimension config (identical to D1 index.ts) ─────────────────────
 # Normalization already inverts bad-is-high components,
 # so higher normalized = better for ALL components.
@@ -127,7 +131,7 @@ DIMENSIONS = {
     },
 }
 
-IN_SCOPE_METROS = ["Pittsburgh", "Los Angeles", "Phoenix", "Charlotte"]
+IN_SCOPE_METROS = pilot_metros()
 
 # 10 test ZIPs — 2 per metro + 2 extra, spanning A/C/F grades.
 # UPDATE THESE after running the test-ZIP query.

@@ -1,0 +1,53 @@
+# metros.yml — Single source of truth for metro configuration.
+# Scope: "pilot" = in-scope for scoring/grading. "expansion" = partial, hidden in Phase E.
+# noise_raster_filename: BTS noise raster file per state (used by cardiovascular pipeline).
+# state_fips: FIPS code for EPA AQS lookups (used by respiratory pipeline).
+
+metros:
+  - name: Pittsburgh
+    state: PA
+    state_fips: "42"
+    scope: pilot
+    noise_raster_filename: PA_rail_road_and_aviation_noise_2020.tif
+
+  - name: Los Angeles
+    state: CA
+    state_fips: "06"
+    scope: pilot
+    noise_raster_filename: CA_rail_road_and_aviation_noise_2020.tif
+
+  - name: Phoenix
+    state: AZ
+    state_fips: "04"
+    scope: pilot
+    noise_raster_filename: AZ_rail_road_and_aviation_noise_2020.tif
+
+  - name: Charlotte
+    state: NC
+    state_fips: "37"
+    scope: pilot
+    noise_raster_filename: NC_rail_road_and_aviation_noise_2020.tif
+
+  - name: Chicago
+    state: IL
+    state_fips: "17"
+    scope: expansion
+    noise_raster_filename: IL_rail_road_and_aviation_noise_2020.tif
+
+  - name: Houston
+    state: TX
+    state_fips: "48"
+    scope: expansion
+    noise_raster_filename: TX_rail_road_and_aviation_noise_2020.tif
+
+  - name: Atlanta
+    state: GA
+    state_fips: "13"
+    scope: expansion
+    noise_raster_filename: GA_rail_road_and_aviation_noise_2020.tif
+
+  - name: Denver
+    state: CO
+    state_fips: "08"
+    scope: expansion
+    noise_raster_filename: CO_rail_road_and_aviation_noise_2020.tif

@@ -23,10 +23,15 @@
 
 # %%
 import os
+import sys
 import time
 import traceback
 import requests
 import pandas as pd
+
+# Add project root to path for shared config
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+from scripts.lib.metros import noise_raster_map, state_metro_map
 from datetime import datetime, date
 
 # ── Mount Google Drive ───────────────────────────────────────
@@ -268,7 +273,7 @@ log("START", f"Inserting {len(df_new)} new ZIPs into zip_codes table")
 failed_zips = []
 inserted = 0
 
-STATE_MAP = {"Chicago": "IL", "Houston": "TX", "Atlanta": "GA", "Denver": "CO"}
+STATE_MAP = {v: k for k, vs in state_metro_map().items() for v in vs}
 
 for i, row in df_new.iterrows():
     record = {
@@ -358,16 +363,7 @@ else:
 # These already cover all 8 metros.
 
 # %%
-STATE_NOISE_RASTERS = {
-    "PA": f"{DRIVE_PREFIX}/PA_rail_road_and_aviation_noise_2020.tif",
-    "CA": f"{DRIVE_PREFIX}/CA_rail_road_and_aviation_noise_2020.tif",
-    "AZ": f"{DRIVE_PREFIX}/AZ_rail_road_and_aviation_noise_2020.tif",
-    "NC": f"{DRIVE_PREFIX}/NC_rail_road_and_aviation_noise_2020.tif",
-    "IL": f"{DRIVE_PREFIX}/IL_rail_road_and_aviation_noise_2020.tif",
-    "TX": f"{DRIVE_PREFIX}/TX_rail_road_and_aviation_noise_2020.tif",
-    "GA": f"{DRIVE_PREFIX}/GA_rail_road_and_aviation_noise_2020.tif",
-    "CO": f"{DRIVE_PREFIX}/CO_rail_road_and_aviation_noise_2020.tif",
-}
+STATE_NOISE_RASTERS = noise_raster_map(DRIVE_PREFIX)
 
 # ── Check all 8 state rasters ────────────────────────────────
 log("START", "Checking BTS noise rasters (8 per-state files)")

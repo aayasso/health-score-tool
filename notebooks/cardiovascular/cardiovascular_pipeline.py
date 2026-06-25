@@ -18,6 +18,7 @@
 
 # %%
 import os
+import sys
 import math
 import time
 import traceback
@@ -25,6 +26,10 @@ import requests
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+
+# Add project root to path for shared config
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+from scripts.lib.metros import metro_labels, state_metro_map, noise_raster_map
 from datetime import datetime, date
 
 # Colab secrets — uncomment in Colab
@@ -151,16 +156,7 @@ log("START", "Fetching master ZIP list from Supabase")
 zip_data = supabase.table("zip_codes").select("zipcode, metro").execute().data
 df_zips = pd.DataFrame(zip_data)
 
-METRO_LABELS = {
-    "Pittsburgh": "Pittsburgh",
-    "Los Angeles": "Los Angeles",
-    "Phoenix": "Phoenix",
-    "Charlotte": "Charlotte",
-    "Chicago": "Chicago",
-    "Houston": "Houston",
-    "Atlanta": "Atlanta",
-    "Denver": "Denver",
-}
+METRO_LABELS = metro_labels()
 
 ALL_ZIPS = df_zips["zipcode"].tolist()
 ZIP_METRO_MAP = dict(zip(df_zips["zipcode"], df_zips["metro"]))
@@ -364,28 +360,10 @@ import os
 # Each state's ZIPs are processed separately via STATE_METRO_MAP below.
 DRIVE_PREFIX = "/content/drive/MyDrive/Colab Notebooks/health-score-data"
 
-STATE_NOISE_RASTERS = {
-    "PA": f"{DRIVE_PREFIX}/PA_rail_road_and_aviation_noise_2020.tif",
-    "CA": f"{DRIVE_PREFIX}/CA_rail_road_and_aviation_noise_2020.tif",
-    "AZ": f"{DRIVE_PREFIX}/AZ_rail_road_and_aviation_noise_2020.tif",
-    "NC": f"{DRIVE_PREFIX}/NC_rail_road_and_aviation_noise_2020.tif",
-    "IL": f"{DRIVE_PREFIX}/IL_rail_road_and_aviation_noise_2020.tif",
-    "TX": f"{DRIVE_PREFIX}/TX_rail_road_and_aviation_noise_2020.tif",
-    "GA": f"{DRIVE_PREFIX}/GA_rail_road_and_aviation_noise_2020.tif",
-    "CO": f"{DRIVE_PREFIX}/CO_rail_road_and_aviation_noise_2020.tif",
-}
+STATE_NOISE_RASTERS = noise_raster_map(DRIVE_PREFIX)
 
 # Map each state to the metros whose ZIPs fall within that state's raster
-STATE_METRO_MAP = {
-    "PA": ["Pittsburgh"],
-    "CA": ["Los Angeles"],
-    "AZ": ["Phoenix"],
-    "NC": ["Charlotte"],
-    "IL": ["Chicago"],
-    "TX": ["Houston"],
-    "GA": ["Atlanta"],
-    "CO": ["Denver"],
-}
+STATE_METRO_MAP = state_metro_map()
 
 ZCTA_SHAPEFILE_PATH = f"{DRIVE_PREFIX}/tl_2020_us_zcta520.shp"
 

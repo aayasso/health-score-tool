@@ -12,8 +12,13 @@
 
 # %%
 import os
+import sys
 import traceback
 from datetime import datetime
+
+# Add project root to path for shared config
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+from scripts.lib.metros import all_metros
 
 # Colab secrets — uncomment in Colab
 # from google.colab import userdata
@@ -81,7 +86,7 @@ TEST_ZIP_METROS = {
     "30309": "Atlanta",
     "80202": "Denver",
 }
-EXPECTED_METROS = {"Pittsburgh", "Los Angeles", "Phoenix", "Charlotte", "Chicago", "Houston", "Atlanta", "Denver"}
+EXPECTED_METROS = set(all_metros())
 VALID_GRADES = {"A", "B", "C", "D", "F"}
 
 # Table configurations

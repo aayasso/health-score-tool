@@ -21,6 +21,7 @@
 
 # %%
 import os
+import sys
 import time
 import traceback
 import requests
@@ -28,6 +29,10 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 from datetime import datetime, date
+
+# Add project root to path for shared config
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+from scripts.lib.metros import metro_labels
 
 # Colab secrets — uncomment in Colab
 # from google.colab import userdata
@@ -153,16 +158,7 @@ log("START", "Fetching master ZIP list from Supabase")
 zip_data = supabase.table("zip_codes").select("zipcode, metro").execute().data
 df_zips = pd.DataFrame(zip_data)
 
-METRO_LABELS = {
-    "Pittsburgh": "Pittsburgh",
-    "Los Angeles": "Los Angeles",
-    "Phoenix": "Phoenix",
-    "Charlotte": "Charlotte",
-    "Chicago": "Chicago",
-    "Houston": "Houston",
-    "Atlanta": "Atlanta",
-    "Denver": "Denver",
-}
+METRO_LABELS = metro_labels()
 
 ALL_ZIPS = df_zips["zipcode"].tolist()
 ZIP_METRO_MAP = dict(zip(df_zips["zipcode"], df_zips["metro"]))
