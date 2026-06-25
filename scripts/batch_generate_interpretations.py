@@ -183,6 +183,11 @@ def build_prompt(zipcode, dim_key, letter_grade, row):
         "- Write plain prose only. No markdown headers, bullet points, or formatting.\n"
         "- Do not mention any numbers, scores, percentages, or percentiles.\n"
         "- Do not mention or echo the ZIP code number.\n"
+        "- Do not state or name the letter grade itself (for example A, B, C, D, "
+        "or F) and do not refer to it as a grade. Describe the neighborhood's "
+        "relative standing qualitatively in words instead (for example "
+        "\"a relatively strong standing\" or \"ranks among the more vulnerable "
+        "areas\").\n"
         "- Do not compare to other dimensions (e.g., \"better than its food score\").\n"
         "- Do not reference methodology, weighting, or how grades are computed.\n"
         "- Do not imply the grade is an absolute or national health judgment — "
@@ -204,7 +209,60 @@ def check_output_quality(text):
         issues.append("MARKDOWN BOLD found")
     if re.search(r"^[\s]*[-•]", text, re.MULTILINE):
         issues.append("BULLET POINT found")
+    # Grade-naming: the word "grade", or "earns a B" / "an A" style letter calls.
+    # Negative lookbehind for a hyphen avoids false positives on "low-grade" /
+    # "high-grade" stress, which is normal language, not a grade reference.
+    if re.search(r"(?<!-)\bgrade[ds]?\b", text, re.IGNORECASE):
+        issues.append("GRADE WORD found")
+    if re.search(r"\b(?:earns?|earned|rated|scores?|received?)\s+an?\s+[A-F]\b", text):
+        issues.append("GRADE LETTER found")
     return issues
+
+
+class WriteVerificationError(Exception):
+    """Raised when a DB write did not land as expected. Halts the batch."""
+    pass
+
+
+def write_and_verify(supabase, table, zipcode, interpretation):
+    """Update one row's interpretation, then re-read it and confirm it landed.
+
+    Guards against silent RLS/permission failures: supabase-py does NOT raise
+    when an UPDATE affects zero rows (e.g. wrong key, no UPDATE policy), it just
+    returns an empty result. This re-reads the row and raises if the stored text
+    does not match what we just wrote, so a silent no-op stops the batch loudly
+    instead of being reported as success.
+    """
+    update_resp = supabase.table(table) \
+        .update({"interpretation": interpretation}) \
+        .eq("zipcode", zipcode) \
+        .execute()
+
+    # PostgREST returns the updated rows by default. Empty == nothing written.
+    if not getattr(update_resp, "data", None):
+        raise WriteVerificationError(
+            f"{table} / {zipcode}: UPDATE returned no rows — write was blocked "
+            f"(likely RLS/permission: confirm SUPABASE_KEY is the service role key)."
+        )
+
+    # Re-read the row and confirm the persisted text matches.
+    check = supabase.table(table) \
+        .select("interpretation") \
+        .eq("zipcode", zipcode) \
+        .limit(1) \
+        .execute()
+
+    if not check.data:
+        raise WriteVerificationError(
+            f"{table} / {zipcode}: row not found on re-read after UPDATE."
+        )
+
+    stored = check.data[0].get("interpretation")
+    if stored != interpretation:
+        raise WriteVerificationError(
+            f"{table} / {zipcode}: stored text does not match generated text "
+            f"after UPDATE — write did not persist correctly."
+        )
 
 
 def run(mode):
@@ -251,7 +309,7 @@ def run(mode):
 
             try:
                 resp = client.messages.create(
-                    model="claude-sonnet-4-20250514",
+                    model="claude-sonnet-4-6",
                     max_tokens=300,
                     messages=[{"role": "user", "content": prompt}],
                 )
@@ -271,18 +329,23 @@ def run(mode):
                     print(f"\n  [{zipcode}] {row['metro']} | Grade {letter_grade}{flag}")
                     print(f"  {interpretation}")
                 elif mode in ("test-write", "full"):
-                    # Write to DB
-                    supabase.table(dim["table"]) \
-                        .update({"interpretation": interpretation}) \
-                        .eq("zipcode", zipcode) \
-                        .execute()
+                    # Write to DB, then verify it actually landed.
+                    write_and_verify(supabase, dim["table"], zipcode, interpretation)
 
                     if mode == "test-write" or (i + 1) % 50 == 0 or (i + 1) == len(rows):
-                        print(f"  [{i+1}/{len(rows)}] {zipcode} ({letter_grade}): written{flag}")
+                        print(f"  [{i+1}/{len(rows)}] {zipcode} ({letter_grade}): written + verified{flag}")
 
                     if issues:
                         print(f"    QUALITY: {interpretation[:100]}...")
 
+            except WriteVerificationError as e:
+                # A write that did not land must stop the batch immediately —
+                # do not keep generating (and paying) into a DB that isn't saving.
+                print(f"\n  *** WRITE VERIFICATION FAILED ***")
+                print(f"  {e}")
+                print(f"  Halting batch. Generated so far: {total_generated}. "
+                      f"Nothing further will be written.")
+                raise
             except Exception as e:
                 total_errors += 1
                 print(f"  ERROR [{zipcode}]: {e}")
