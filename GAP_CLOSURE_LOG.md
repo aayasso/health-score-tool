@@ -234,3 +234,62 @@ The function calls the Anthropic API (paid per call) and writes to the DB. Any p
 **What changed:** Nothing. D2 is a security decision + documentation, not a code change.
 
 **Files committed:** `GAP_CLOSURE_LOG.md` (this entry only)
+
+---
+
+### 2026-06-25 — Task D3: Batch-regenerate all in-scope interpretations
+
+**Branch:** `gap-closure/a1-enable-rls`
+
+**What this task does:** Regenerated fresh per-dimension interpretations for all 574
+in-scope ZIPs × 5 dimensions (2,870 rows) using the D1 prompt logic (per-dimension,
+qualitative terciles, no numbers), reflecting the new B1 scores and C1 percentile
+grades, written via the service role key.
+
+**Root cause of the prior silent failure (confirmed):** The Colab `SUPABASE_KEY` was the
+publishable key (`sb_pub...`). Under the RLS enabled in A1 (SELECT-only for anon, no
+UPDATE policy), every write was silently rejected — `supabase-py` does not raise on a
+zero-row UPDATE. The script read fine, generated clean text, and reported success while
+writing nothing. The DB retained the old, pre-C1 stale interpretations (score leaks,
+markdown, mismatched grades). Fixed by swapping `SUPABASE_KEY` to the service role key
+(`eyJ...`).
+
+**Hardening added to `scripts/batch_generate_interpretations.py`:**
+- **Write-verification guard:** after each UPDATE, re-read the row and confirm the stored
+  text matches what was generated. On any mismatch/zero-write, raise
+  `WriteVerificationError` and halt the batch immediately — no more silent success.
+- **Model string:** `claude-sonnet-4-20250514` → `claude-sonnet-4-6`. The old model
+  reached end-of-life 2026-06-15 and now 404s. (Model strings have hard EOL dates and
+  fail mid-run; centralizing the model string is logged in TECH_DEBT.md.)
+- **Prompt rule:** describe standing qualitatively; do NOT name the letter grade (A–F) or
+  use the word "grade." Keeps interpretations from going stale when percentiles
+  recompute, and removes redundancy with the UI badge.
+- **Grade-leak detector** in `check_output_quality`, excluding "low-grade"/"high-grade"
+  to avoid false positives on normal stress language.
+
+**BEFORE snapshot (reversibility):** `interpretation_pre_d3` TEXT column added to all 5
+dimension tables, populated with the current interpretation for in-scope rows only
+(expansion rows left NULL, proving they're untouched).
+Rollback: `UPDATE <table> SET interpretation = interpretation_pre_d3 WHERE
+interpretation_pre_d3 IS NOT NULL`.
+
+**Test-then-full approach:** Ran `--mode test-write` on 8 representative ZIPs (A/C/F
+across all 4 metros) × 5 dims = 40 rows first; verified clean in the DB before the full
+run.
+
+**Full batch result:** 2,870 generated, 0 errors, all rows written + verified by the
+guard. The detector flagged 9 rows; manual review confirmed all were false positives
+("low-grade stress(or)" — the word "grade" inside "low-grade," no letter named). Detector
+regex tightened accordingly. No genuine leaks.
+
+**Verification (V1–V5):** completeness (574 non-null per dimension, 0 missing), zero digit
+leaks, zero markdown, expansion metros untouched, and spot-checks across grades read
+clean and grade-consistent.
+
+**Still pending (not part of this commit):** Sync the `generate-interpretation` edge
+function `index.ts` prompt with the same three rules (no numbers, no grade-naming, no ZIP
+echo) — the batch script and edge-function prompts are currently drifted. Logged in
+TECH_DEBT.md.
+
+**Files committed:** `scripts/batch_generate_interpretations.py`, `TECH_DEBT.md`,
+`GAP_CLOSURE_LOG.md` (this entry).
