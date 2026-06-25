@@ -1,0 +1,7 @@
+# pipeline.yml — Central pipeline configuration.
+# Imported by all pipelines and batch scripts via scripts/lib/pipeline.py.
+
+# Claude model for interpretation generation.
+# Model strings have hard EOL dates and will 404 after expiry.
+# Update here once; all consumers pick it up automatically.
+claude_model: "claude-sonnet-4-6"

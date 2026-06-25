@@ -20,6 +20,10 @@ from supabase import create_client
 # Add project root to path for shared config
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from scripts.lib.metros import pilot_metros
+from scripts.lib.pipeline import (
+    claude_model, write_and_verify as _shared_write_and_verify,
+    WriteVerificationError, preflight,
+)
 
 # ── Dimension config (identical to D1 index.ts) ─────────────────────
 # Normalization already inverts bad-is-high components,
@@ -223,50 +227,9 @@ def check_output_quality(text):
     return issues
 
 
-class WriteVerificationError(Exception):
-    """Raised when a DB write did not land as expected. Halts the batch."""
-    pass
-
-
 def write_and_verify(supabase, table, zipcode, interpretation):
-    """Update one row's interpretation, then re-read it and confirm it landed.
-
-    Guards against silent RLS/permission failures: supabase-py does NOT raise
-    when an UPDATE affects zero rows (e.g. wrong key, no UPDATE policy), it just
-    returns an empty result. This re-reads the row and raises if the stored text
-    does not match what we just wrote, so a silent no-op stops the batch loudly
-    instead of being reported as success.
-    """
-    update_resp = supabase.table(table) \
-        .update({"interpretation": interpretation}) \
-        .eq("zipcode", zipcode) \
-        .execute()
-
-    # PostgREST returns the updated rows by default. Empty == nothing written.
-    if not getattr(update_resp, "data", None):
-        raise WriteVerificationError(
-            f"{table} / {zipcode}: UPDATE returned no rows — write was blocked "
-            f"(likely RLS/permission: confirm SUPABASE_KEY is the service role key)."
-        )
-
-    # Re-read the row and confirm the persisted text matches.
-    check = supabase.table(table) \
-        .select("interpretation") \
-        .eq("zipcode", zipcode) \
-        .limit(1) \
-        .execute()
-
-    if not check.data:
-        raise WriteVerificationError(
-            f"{table} / {zipcode}: row not found on re-read after UPDATE."
-        )
-
-    stored = check.data[0].get("interpretation")
-    if stored != interpretation:
-        raise WriteVerificationError(
-            f"{table} / {zipcode}: stored text does not match generated text "
-            f"after UPDATE — write did not persist correctly."
-        )
+    """Delegate to shared write_and_verify for the interpretation column."""
+    _shared_write_and_verify(supabase, table, zipcode, "interpretation", interpretation)
 
 
 def run(mode):
@@ -277,6 +240,8 @@ def run(mode):
     if not all([supabase_url, supabase_key, anthropic_key]):
         print("ERROR: Set SUPABASE_URL, SUPABASE_KEY, ANTHROPIC_API_KEY in environment.")
         sys.exit(1)
+
+    preflight(supabase_key, anthropic_key=anthropic_key, check_git=(mode == "full"))
 
     supabase = create_client(supabase_url, supabase_key)
     client = anthropic.Anthropic(api_key=anthropic_key)
@@ -313,7 +278,7 @@ def run(mode):
 
             try:
                 resp = client.messages.create(
-                    model="claude-sonnet-4-6",
+                    model=claude_model(),
                     max_tokens=300,
                     messages=[{"role": "user", "content": prompt}],
                 )

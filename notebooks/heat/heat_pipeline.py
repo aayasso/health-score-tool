@@ -33,6 +33,7 @@ from datetime import datetime, date
 # Add project root to path for shared config
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from scripts.lib.metros import metro_labels
+from scripts.lib.pipeline import upsert_and_verify, preflight
 
 # Colab secrets — uncomment in Colab
 # from google.colab import userdata
@@ -48,6 +49,7 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 from supabase import create_client
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+preflight(SUPABASE_KEY, check_git=False)
 
 # %%
 # ── Logging ──────────────────────────────────────────────────
@@ -64,29 +66,8 @@ def log(level: str, message: str):
 
 def upsert_with_retry(supabase, table_name, record, on_conflict="zipcode",
                       max_attempts=3, backoff_base=1):
-    """
-    Upsert a single record with retry on transient HTTP errors (502/503/504).
-    Exponential backoff: 1s, 2s, 4s. Raises on non-retryable or final failure.
-    """
-    for attempt in range(1, max_attempts + 1):
-        try:
-            supabase.table(table_name).upsert(
-                record, on_conflict=on_conflict
-            ).execute()
-            return
-        except Exception as e:
-            err_str = str(e)
-            retryable = any(code in err_str for code in ["502", "503", "504"]) \
-                        or "ConnectionError" in type(e).__name__ \
-                        or "ConnectionReset" in err_str \
-                        or "RemoteDisconnected" in err_str
-            if retryable and attempt < max_attempts:
-                wait = backoff_base * (2 ** (attempt - 1))
-                log("WARN", f"Retry {attempt}/{max_attempts} for ZIP {record.get('zipcode')} "
-                            f"after {type(e).__name__}: {err_str[:100]}... waiting {wait}s")
-                time.sleep(wait)
-            else:
-                raise
+    """Delegate to shared upsert_and_verify (retry + write verification)."""
+    upsert_and_verify(supabase, table_name, record, on_conflict, max_attempts, backoff_base)
 
 
 # ── Test Runner ──────────────────────────────────────────────
