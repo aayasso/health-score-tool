@@ -209,7 +209,6 @@ Deno.serve(async (req) => {
 
 Write 2-3 sentences interpreting this neighborhood's ${dim.label} environment. The letter grade reflects how this ZIP code ranks relative to other neighborhoods in the covered metro areas for this specific dimension — it is a relative standing, not an absolute or national health judgment.
 
-ZIP Code: ${zipcode}
 ${dim.label} Grade: ${row.letter_grade}
 
 Component conditions:
@@ -218,6 +217,8 @@ ${componentLines}
 Rules:
 - Write plain prose only. No markdown headers, bullet points, or formatting.
 - Do not mention any numbers, scores, percentages, or percentiles.
+- Do not mention or echo the ZIP code number.
+- Do not name the letter grade directly — describe the standing qualitatively instead.
 - Do not compare to other dimensions (e.g., "better than its food score").
 - Do not reference methodology, weighting, or how grades are computed.
 - Do not imply the grade is an absolute or national health judgment — it is a relative standing within this dataset for this one dimension.
@@ -233,7 +234,7 @@ Rules:
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 300,
         messages: [{ role: "user", content: prompt }],
       }),
