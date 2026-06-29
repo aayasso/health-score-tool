@@ -804,7 +804,6 @@ for _, row in df.iterrows():
         "health_outcome_raw": float(row["health_outcome_raw"]) if pd.notna(row["health_outcome_raw"]) else None,
         "health_outcome_normalized": float(row["health_outcome_normalized"]) if pd.notna(row["health_outcome_normalized"]) else None,
         "composite_score": float(row["composite_score"]),
-        "letter_grade": row["letter_grade"],
         "score_date": str(date.today()),
     }
 

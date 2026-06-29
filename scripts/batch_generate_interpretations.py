@@ -19,7 +19,7 @@ from supabase import create_client
 
 # Add project root to path for shared config
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from scripts.lib.metros import pilot_metros
+from scripts.lib.metros import all_metros, pilot_metros
 from scripts.lib.pipeline import (
     claude_model, write_and_verify as _shared_write_and_verify,
     WriteVerificationError, preflight,
@@ -135,19 +135,19 @@ DIMENSIONS = {
     },
 }
 
-IN_SCOPE_METROS = pilot_metros()
+IN_SCOPE_METROS = all_metros()
 
 # 10 test ZIPs — 2 per metro + 2 extra, spanning A/C/F grades.
 # UPDATE THESE after running the test-ZIP query.
 TEST_ZIPS = [
-    "28078",  # Charlotte — heat A
-    "90290",  # Los Angeles — heat A
-    "90006",  # Los Angeles — heat F
-    "85382",  # Phoenix — heat C
-    "85301",  # Phoenix — heat F
-    "15046",  # Pittsburgh — heat A
-    "15213",  # Pittsburgh — heat C
-    "15110",  # Pittsburgh — heat F
+    "28078",  # Charlotte (pilot) — A-range
+    "90006",  # Los Angeles (pilot) — F-range
+    "85382",  # Phoenix (pilot) — C-range
+    "15213",  # Pittsburgh (pilot) — mid-range
+    "60614",  # Chicago (expansion)
+    "77005",  # Houston (expansion)
+    "30309",  # Atlanta (expansion)
+    "80202",  # Denver (expansion)
 ]
 
 

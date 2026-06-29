@@ -606,9 +606,11 @@ else:
             break
         _offset += batch_size
 
-    if len(all_canopy_rows) < 550:
+    canopy_floor = int(len(ALL_ZIPS) * 0.95)
+    if len(all_canopy_rows) < canopy_floor:
         raise RuntimeError(
-            f"Tree canopy data not found in heat_scores ({len(all_canopy_rows)} rows, need ≥550). "
+            f"Tree canopy data not found in heat_scores ({len(all_canopy_rows)} rows, "
+            f"need ≥{canopy_floor} = 95% of {len(ALL_ZIPS)} ZIPs). "
             f"Run the Heat pipeline first."
         )
 
@@ -1151,7 +1153,6 @@ for _, row in df.iterrows():
         "health_outcomes_raw": float(row["health_outcomes_raw"]) if pd.notna(row["health_outcomes_raw"]) else None,
         "health_outcomes_normalized": float(row["health_outcomes_normalized"]) if pd.notna(row["health_outcomes_normalized"]) else None,
         "composite_score": float(row["composite_score"]),
-        "letter_grade": row["letter_grade"],
         "score_date": str(date.today()),
     }
 

@@ -861,7 +861,6 @@ for _, row in df.iterrows():
         "impervious_raw": float(row["impervious_raw"]) if pd.notna(row["impervious_raw"]) else None,
         "impervious_normalized": float(row["impervious_normalized"]) if pd.notna(row["impervious_normalized"]) else None,
         "composite_score": float(row["composite_score"]),
-        "letter_grade": row["letter_grade"],
         "score_date": str(date.today()),
     }
 
