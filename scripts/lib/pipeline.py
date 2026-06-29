@@ -9,6 +9,8 @@ import yaml
 from pathlib import Path
 from typing import Optional
 
+import pandas as pd
+
 _CONFIG_PATH = Path(__file__).resolve().parent.parent.parent / "config" / "pipeline.yml"
 
 
@@ -175,3 +177,24 @@ def preflight(supabase_key: str,
     if errors:
         msg = "PREFLIGHT FAILED:\n" + "\n".join(f"  - {e}" for e in errors)
         raise PreflightError(msg)
+
+
+# ── ZIP loader ───────────────────────────────────────────────────
+
+
+def load_zip_codes(supabase, batch_size: int = 500) -> pd.DataFrame:
+    """Load ALL rows from zip_codes, paginating past Supabase's default 1000-row cap."""
+    all_rows = []
+    offset = 0
+    while True:
+        resp = supabase.table("zip_codes") \
+            .select("zipcode, metro") \
+            .range(offset, offset + batch_size - 1) \
+            .execute()
+        if not resp.data:
+            break
+        all_rows.extend(resp.data)
+        if len(resp.data) < batch_size:
+            break
+        offset += batch_size
+    return pd.DataFrame(all_rows)

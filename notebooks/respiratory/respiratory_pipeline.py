@@ -31,7 +31,7 @@ from datetime import datetime, date
 # Add project root to path for shared config
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from scripts.lib.metros import metro_labels, state_fips as get_state_fips
-from scripts.lib.pipeline import upsert_and_verify, preflight
+from scripts.lib.pipeline import upsert_and_verify, preflight, load_zip_codes
 
 # Colab secrets — uncomment in Colab
 # from google.colab import userdata
@@ -138,8 +138,7 @@ def print_validation_report(tool_name: str, df, expected_zips: int = 600):
 # ── Master ZIP List ─────────────���────────────────────────────
 log("START", "Fetching master ZIP list from Supabase")
 
-zip_data = supabase.table("zip_codes").select("zipcode, metro").execute().data
-df_zips = pd.DataFrame(zip_data)
+df_zips = load_zip_codes(supabase)
 
 METRO_LABELS = metro_labels()
 
