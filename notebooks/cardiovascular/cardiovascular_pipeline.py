@@ -306,17 +306,37 @@ log("INFO", f"  CHD coverage: {df_cardio['chd_raw'].notna().sum()} ZIPs")
 log("START", "Processing BTS Transportation Noise raster")
 
 # ── Check if already processed ───────────────────────────────
-def raster_already_processed(source_name: str, min_expected_rows: int = 550) -> bool:
-    """Check raw_signals for existing processed raster data."""
-    result = supabase.table("raw_signals") \
-        .select("zipcode", count="exact") \
-        .eq("data_source", source_name) \
-        .execute()
-    row_count = result.count or 0
-    if row_count >= min_expected_rows:
-        log("INFO", f"  {source_name} already processed ({row_count} ZIPs) — skipping download")
+def raster_already_processed(source_name: str, zip_list: list = None) -> bool:
+    """Check raw_signals covers ALL current ZIPs for this data_source.
+
+    Previous logic checked row count against a hardcoded threshold (550),
+    which caused newly-added ZIPs to be skipped when the cache held enough
+    old rows. Now we fetch the actual cached ZIP set (paginated past the
+    Supabase 1000-row default cap) and verify full coverage.
+    """
+    if zip_list is None:
+        zip_list = ALL_ZIPS
+    target_set = set(zip_list)
+    cached_zips = set()
+    batch_size = 1000
+    offset = 0
+    while True:
+        resp = supabase.table("raw_signals") \
+            .select("zipcode") \
+            .eq("data_source", source_name) \
+            .range(offset, offset + batch_size - 1) \
+            .execute()
+        if not resp.data:
+            break
+        cached_zips.update(row["zipcode"] for row in resp.data)
+        if len(resp.data) < batch_size:
+            break
+        offset += batch_size
+    missing = target_set - cached_zips
+    if not missing:
+        log("INFO", f"  {source_name} already processed ({len(cached_zips)} ZIPs cover all {len(target_set)}) — skipping download")
         return True
-    log("INFO", f"  {source_name}: {row_count} rows found, need {min_expected_rows} — proceeding")
+    log("INFO", f"  {source_name}: {len(cached_zips)} cached, {len(missing)} of {len(target_set)} ZIPs missing — proceeding")
     return False
 
 noise_already_done = raster_already_processed("bts_noise")
