@@ -514,6 +514,18 @@ df["metro"] = df["zipcode"].map(ZIP_METRO_MAP)
 # Filter to only our 600 ZIPs (safety)
 df = df[df["zipcode"].isin(ALL_ZIPS)].copy()
 
+# ── Metro-median imputation for raster nodata ────────────────
+# A handful of ZIPs fall on raster nodata pixels (e.g. water bodies).
+# Fill nulls with the median of the same metro so no ZIPs are dropped.
+for col in ["light_pollution_raw"]:
+    nulls = df[col].isna()
+    if nulls.any():
+        metro_medians = df.groupby("metro")[col].transform("median")
+        df.loc[nulls, col] = metro_medians[nulls]
+        affected = df.loc[nulls, "metro"].value_counts()
+        metro_detail = ", ".join(f"{m} ({n})" for m, n in affected.items())
+        log("INFO", f"  Imputed {nulls.sum()} null {col} values with metro median: {metro_detail}")
+
 log("INFO", f"Merged DataFrame: {len(df)} rows")
 print_validation_report("STRESS / SENSORY — MERGED RAW DATA", df)
 
