@@ -353,6 +353,13 @@ for required_col in ["FIPS", "GROCPTH16"]:
 df_atlas_raw["FIPS"] = df_atlas_raw["FIPS"].astype(str).str.zfill(5)
 df_atlas_raw["GROCPTH16"] = pd.to_numeric(df_atlas_raw["GROCPTH16"], errors="coerce")
 
+# USDA uses -9999 as a "no data" sentinel in GROCPTH columns — treat as null
+sentinel_mask = df_atlas_raw["GROCPTH16"] < 0
+sentinel_count = sentinel_mask.sum()
+if sentinel_count > 0:
+    df_atlas_raw.loc[sentinel_mask, "GROCPTH16"] = pd.NA
+    log("INFO", f"  Nulled {sentinel_count} GROCPTH16 sentinel values (-9999 / negative)")
+
 log("INFO", f"GROCPTH16 range: {df_atlas_raw['GROCPTH16'].min():.4f} – {df_atlas_raw['GROCPTH16'].max():.4f}")
 
 # %%
@@ -525,6 +532,18 @@ df["metro"] = df["zipcode"].map(ZIP_METRO_MAP)
 
 # Filter to only our 600 ZIPs (safety)
 df = df[df["zipcode"].isin(ALL_ZIPS)].copy()
+
+# ── Metro-median imputation for missing component values ─────
+# grocery_density_raw: USDA sentinel -9999 nulled above, plus county-level gaps
+# Fill nulls with the median of the same metro so no ZIP carries a null component.
+for col in ["grocery_density_raw"]:
+    nulls = df[col].isna()
+    if nulls.any():
+        metro_medians = df.groupby("metro")[col].transform("median")
+        df.loc[nulls, col] = metro_medians[nulls]
+        affected = df.loc[nulls, "metro"].value_counts()
+        metro_detail = ", ".join(f"{m} ({n})" for m, n in affected.items())
+        log("INFO", f"  Imputed {nulls.sum()} null {col} values with metro median: {metro_detail}")
 
 log("INFO", f"Merged DataFrame: {len(df)} rows")
 print_validation_report("FOOD ACCESS — MERGED RAW DATA", df)
