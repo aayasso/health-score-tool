@@ -205,11 +205,24 @@ Deno.serve(async (req) => {
       })
       .join("\n");
 
+    // Map grade to a tone anchor phrase so the model has an unambiguous
+    // framing target without needing to interpret a raw letter.
+    const toneMap: Record<string, string> = {
+      A: "among the strongest-performing neighborhoods in this dimension",
+      B: "above average among the covered neighborhoods in this dimension",
+      C: "near the middle of the pack among covered neighborhoods",
+      D: "below average among the covered neighborhoods in this dimension",
+      F: "among the most vulnerable neighborhoods in this dimension",
+    };
+    const toneAnchor = toneMap[row.letter_grade as string] ?? "in the middle range";
+
     const prompt = `You are a public health analyst writing a plain-language summary for residents and real estate professionals.
 
-Write 2-3 sentences interpreting this neighborhood's ${dim.label} environment. The letter grade reflects how this ZIP code ranks relative to other neighborhoods in the covered metro areas for this specific dimension — it is a relative standing, not an absolute or national health judgment.
+Write 2-3 sentences interpreting this neighborhood's ${dim.label} environment.
 
-${dim.label} Grade: ${row.letter_grade}
+IMPORTANT — how to use the two inputs below:
+1. RELATIVE STANDING (primary signal): This neighborhood ranks ${toneAnchor}. The overall tone and framing of your response MUST match this standing. Convey this standing in your own varied wording — do not copy the phrasing above verbatim. This is a relative ranking against all other neighborhoods in the covered metro areas — it is not an absolute or national health judgment.
+2. COMPONENT CONDITIONS (supporting detail): The conditions below describe what residents experience on the ground. Use them to add specificity, but frame them in a way that is consistent with the relative standing above. If a condition sounds negative but the standing is strong, frame it as a remaining consideration within an otherwise favorable environment. If a condition sounds positive but the standing is weak, frame it as a relative bright spot in an otherwise challenging environment.
 
 Component conditions:
 ${componentLines}
@@ -218,7 +231,7 @@ Rules:
 - Write plain prose only. No markdown headers, bullet points, or formatting.
 - Do not mention any numbers, scores, percentages, or percentiles.
 - Do not mention or echo the ZIP code number.
-- Do not name the letter grade directly — describe the standing qualitatively instead.
+- Do not state or name the letter grade itself (for example A, B, C, D, or F) and do not refer to it as a grade. Describe the neighborhood's relative standing qualitatively in words instead.
 - Do not compare to other dimensions (e.g., "better than its food score").
 - Do not reference methodology, weighting, or how grades are computed.
 - Do not imply the grade is an absolute or national health judgment — it is a relative standing within this dataset for this one dimension.
