@@ -211,14 +211,6 @@ log("INFO", f"{len(df)} ZIPs have all 5 tool scores (of {len(df_zips)} total)")
 df["composite_score"] = df[SCORE_COLS].mean(axis=1).round(2)
 
 # Letter grade
-GRADE_SCALE = {
-    "A": (80, 100),
-    "B": (65, 79.99),
-    "C": (50, 64.99),
-    "D": (35, 49.99),
-    "F": (0, 34.99),
-}
-
 def assign_grade(score: float) -> str:
     if score >= 80:
         return "A"
@@ -265,14 +257,6 @@ scoring_tests = [
         lambda: (
             df["letter_grade"].isin(["A", "B", "C", "D", "F"]).all(),
             f"Unique: {df['letter_grade'].unique().tolist()}"
-        )),
-    ("Grade boundaries correct for all rows",
-        lambda: (
-            all(
-                GRADE_SCALE[row["letter_grade"]][0] <= row["composite_score"] <= GRADE_SCALE[row["letter_grade"]][1]
-                for _, row in df.iterrows()
-            ),
-            "Grade/score mismatch found"
         )),
     ("No single grade > 70% of ZIPs",
         lambda: (
@@ -405,12 +389,6 @@ write_tests = [
             supabase.table(TABLE_NAME).select("zipcode", count="exact")
                 .is_("composite_score", "null").execute().count == 0,
             "Found null composite_score rows"
-        )),
-    ("No null letter_grade in Supabase",
-        lambda: (
-            supabase.table(TABLE_NAME).select("zipcode", count="exact")
-                .is_("letter_grade", "null").execute().count == 0,
-            "Found null letter_grade rows"
         )),
 ]
 

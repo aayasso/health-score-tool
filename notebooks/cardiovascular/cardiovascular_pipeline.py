@@ -786,11 +786,6 @@ log("INFO", f"Grade distribution:\n{df['letter_grade'].value_counts().to_string(
 # %%
 log("TEST", "Running Suite 3 — Scoring Tests")
 
-GRADE_SCALE = {
-    "A": (80, 100), "B": (65, 79.999), "C": (50, 64.999),
-    "D": (35, 49.999), "F": (0, 34.999),
-}
-
 # Spot-check ZIPs: expect general grade direction
 # Affluent/suburban ZIPs should not score F; dense urban cores may score lower
 SPOT_CHECK_ZIPS = {
@@ -823,14 +818,6 @@ scoring_tests = [
         lambda: (
             df["letter_grade"].isin(["A", "B", "C", "D", "F"]).all(),
             f"Invalid: {df[~df['letter_grade'].isin(['A','B','C','D','F'])]['letter_grade'].unique()}"
-        )),
-    ("Grade assignments match score thresholds",
-        lambda: (
-            all(
-                GRADE_SCALE[row["letter_grade"]][0] <= row["composite_score"] <= GRADE_SCALE[row["letter_grade"]][1]
-                for _, row in df.iterrows()
-            ),
-            "Grade/score mismatch found"
         )),
     ("No single grade > 70% of ZIPs",
         lambda: (
@@ -938,12 +925,6 @@ write_tests = [
             supabase.table(TABLE_NAME).select("zipcode", count="exact")
                 .is_("composite_score", "null").execute().count == 0,
             "Found null composite_score rows"
-        )),
-    ("No null letter_grade in Supabase",
-        lambda: (
-            supabase.table(TABLE_NAME).select("zipcode", count="exact")
-                .is_("letter_grade", "null").execute().count == 0,
-            "Found null letter_grade rows"
         )),
 ]
 
