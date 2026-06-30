@@ -34,11 +34,11 @@
   - `stress_scores` — 1,224 rows
   - `food_access_scores` — 1,224 rows
   - `heat_scores` — 1,224 rows
-  - `overall_scores` — equal-weighted average of all 5 tools, 1,224 rows
+  - `overall_scores` — stale (not re-run this session; being retired)
 - **All tables have `score_date` column** for historical tracking / score versioning
 - **QA suite:** `notebooks/qa/qa_data_integrity.py` — updated for 8 metros, 8 test ZIPs
-- **Streamlit app live:** `health-score-tool-gnoxoobgjrakzvwnj4ktec.streamlit.app` — all 5 tabs + overall
-- **LaSalle Technologies site:** `lasalletech.ai` (built in Lovable)
+- **LaSalle Technologies site:** `lasalletech.ai` (built in Lovable) — live frontend; 5-dimension score UI rebuild is the remaining work
+- **Streamlit app retired** — `health-score-tool-gnoxoobgjrakzvwnj4ktec.streamlit.app` is legacy, no longer the live frontend
 
 ### What's In Progress / Next Session Priorities
 1. **Move frontend to Lovable** — replace Streamlit with React components consuming Supabase REST API directly
