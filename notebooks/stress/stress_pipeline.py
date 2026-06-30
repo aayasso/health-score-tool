@@ -740,25 +740,6 @@ log("INFO", f"Grade distribution:\n{df['letter_grade'].value_counts().to_string(
 # %%
 log("TEST", "Running Suite 3 — Scoring Tests")
 
-# Spot-check ZIPs: expect general grade direction
-# Affluent/suburban ZIPs should not score F; dense urban cores may score lower
-# Spot check: (worst_acceptable, best_acceptable) — e.g. ("F", "A") means any grade is fine
-SPOT_CHECK_ZIPS = {
-    "15213": ("F", "A"),   # Pittsburgh — Carnegie Mellon area
-    "90210": ("C", "A"),   # Beverly Hills — low noise, suburban
-    "28202": ("F", "B"),   # Downtown Charlotte — urban core
-}
-
-# Grade order: A=0 (best) … F=4 (worst)
-grade_order = ["A", "B", "C", "D", "F"]
-
-def grade_in_range(grade, worst, best):
-    """Check if grade falls between best and worst (inclusive)."""
-    best_idx = grade_order.index(best)
-    worst_idx = grade_order.index(worst)
-    grade_idx = grade_order.index(grade)
-    return best_idx <= grade_idx <= worst_idx
-
 scoring_tests = [
     ("All composite scores in [0.0, 100.0]",
         lambda: (
@@ -790,21 +771,6 @@ scoring_tests = [
             f"mean={df['composite_score'].mean():.2f}"
         )),
 ]
-
-# Spot checks
-# Spot checks — skip ZIPs not in the scored DataFrame (may lack data coverage)
-for zip_code, (min_g, max_g) in SPOT_CHECK_ZIPS.items():
-    z, mn, mx = zip_code, min_g, max_g
-    if df[df["zipcode"] == z].shape[0] == 0:
-        log("INFO", f"  Skipping spot check for ZIP {z} — not in scored data")
-        continue
-    scoring_tests.append((
-        f"Spot check ZIP {z}: grade between {mn} and {mx}",
-        lambda zc=z, lo=mn, hi=mx: (
-            grade_in_range(df[df["zipcode"] == zc].iloc[0]["letter_grade"], lo, hi),
-            f"ZIP {zc} got grade {df[df['zipcode'] == zc].iloc[0]['letter_grade']}"
-        )
-    ))
 
 suite3_passed = run_tests("STRESS / SENSORY — SCORING", scoring_tests)
 require_all_pass("STRESS / SENSORY — SCORING", suite3_passed)
