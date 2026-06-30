@@ -4,41 +4,52 @@
 
 ---
 
-## Current Status (as of 2026-04-15)
+## Current Status (as of 2026-06-30)
 
 ### Active Phase
-**All 5 tools complete. Pipeline scripts updated for 8-metro expansion (~1,290 ZIPs). Transitioning to Lovable frontend.**
+**GTM pipeline hardening complete. All 5 dimensions re-scored across 1,224 ZIPs in 8 metros. Percentile grades applied. Interpretations regenerated with tone-anchored prompt. Ready for Lovable frontend integration.**
 
 ### What's Complete
-- **All 5 tool pipelines executed** — 574 ZIPs scored across original 4 metros (Pittsburgh, Los Angeles, Phoenix, Charlotte)
-- **Pipeline scripts updated for 8-metro expansion** — Chicago, Houston, Atlanta, Denver added to METRO_LABELS, STATE_METRO_MAP, STATE_NOISE_RASTERS, and all test assertions
-- **QA suite updated** — 8 test ZIPs, 8 expected metros, row count thresholds raised for ~1,290 ZIPs
+- **All 5 dimension pipelines re-executed** — 1,224 ZIPs scored across 8 metros (1,250 in `zip_codes`; 26 have no CDC PLACES data)
+- **Pipeline hardening (harden/metro-config branch):**
+  - Centralized metro config (`config/metros.yml` + `scripts/lib/metros.py`)
+  - Shared pipeline utilities (`scripts/lib/pipeline.py`): write guard, preflight, central model config
+  - ZIP loader paginated past Supabase 1000-row default cap
+  - Raster cache-skip fixed: checks full ZIP coverage instead of hardcoded row-count threshold
+  - Metro-median imputation for raster nodata nulls (all 4 raster pipelines + respiratory air_quality/env_burden)
+  - USDA Food Atlas -9999 sentinel values nulled and imputed
+  - Obsolete Suite 3/4 grade tests removed (GRADE_SCALE boundaries, null letter_grade in DB)
+  - Per-ZIP grade-band spot checks removed from Suite 3 (grades are now percentile-based)
+- **Pooled percentile grades** applied across all 8 metros via `scripts/apply_percentile_grades.sql` (A≥p90, B p70-90, C p30-70, D p10-30, F<p10)
+  - `_pre_gtm` snapshot columns retained in all 5 dimension tables for rollback
+- **Interpretations regenerated** for all 1,224×5 ZIPs with tone-anchored prompt:
+  - Prompt rewritten: relative standing is primary signal (tone anchor phrase), component conditions are subordinate detail with reconciliation instruction
+  - `--mode audit` added for read-only contradiction scanning
+  - `detect_contradiction()` keyword heuristic flags tone/grade mismatches as non-blocking warnings
+  - Edge function `index.ts` mirrored with identical prompt structure
+- **Batch script improvements:** paginated fetch, skip-existing logic, `--force` flag, `--mode audit`
 - **6 Supabase score tables populated:**
-  - `composite_scores` (Respiratory) — 574 rows (pending re-run for 8 metros)
-  - `cardiovascular_scores` — 574 rows (pending re-run for 8 metros)
-  - `stress_scores` — 574 rows (pending re-run for 8 metros)
-  - `food_access_scores` — 574 rows (pending re-run for 8 metros)
-  - `heat_scores` — 574 rows (pending re-run for 8 metros)
-  - `overall_scores` — equal-weighted average of all 5 tools, 574 rows (pending re-run for 8 metros)
+  - `composite_scores` (Respiratory) — 1,224 rows
+  - `cardiovascular_scores` — 1,224 rows
+  - `stress_scores` — 1,224 rows
+  - `food_access_scores` — 1,224 rows
+  - `heat_scores` — 1,224 rows
+  - `overall_scores` — equal-weighted average of all 5 tools, 1,224 rows
 - **All tables have `score_date` column** for historical tracking / score versioning
-- **QA suite:** `notebooks/qa/qa_data_integrity.py` — 106/106 tests passing (per-table integrity, cross-table consistency, metro distribution)
+- **QA suite:** `notebooks/qa/qa_data_integrity.py` — updated for 8 metros, 8 test ZIPs
 - **Streamlit app live:** `health-score-tool-gnoxoobgjrakzvwnj4ktec.streamlit.app` — all 5 tabs + overall
 - **LaSalle Technologies site:** `lasalletech.ai` (built in Lovable)
-- Supabase schema established: `zip_codes`, `raw_signals`, `score_components`, `composite_scores`, `interpretations`, `score_config`, `cardiovascular_scores`, `stress_scores`, `food_access_scores`, `heat_scores`, `overall_scores`
 
 ### What's In Progress / Next Session Priorities
-1. **Execute expanded pipelines in Colab** — run all 5 tools + overall for ~1,290 ZIPs across 8 metros
-   - Requires: ZIP lists for 4 new metros inserted into `zip_codes` table, 4 new BTS state noise rasters (IL, TX, GA, CO) uploaded to Google Drive
-   - CRITICAL: Export current 574-ZIP scores as CSV backup before running (global normalization will shift)
-   - After run: compare old vs new scores for original 574 ZIPs (recalibration audit)
-2. **Move frontend to Lovable** — replace Streamlit with React components consuming Supabase REST API directly
+1. **Move frontend to Lovable** — replace Streamlit with React components consuming Supabase REST API directly
    - Supabase project ref: `hakiksjnpipgstomzzjy`
    - Supabase auto-exposes REST endpoints per table — Lovable can fetch directly using anon key
    - `/healthscore` content brief saved at `content/healthscore-brief.md`
-3. **Frontend polish** — design improvements, responsive layout, loading states
+2. **Frontend polish** — design improvements, responsive layout, loading states
+3. **Deploy updated edge function** to Supabase (prompt already updated in index.ts, needs `supabase functions deploy`)
 
 ### What's Blocked / At Risk
-- Nothing currently blocked — all 5 tools complete and verified
+- Nothing currently blocked — all pipelines, grades, and interpretations complete
 
 ---
 
@@ -375,6 +386,43 @@ Walk Score measures built environment opportunity. This measures health environm
 **Any issues or surprises:**
 - `composite_scores` table (respiratory) has no `metro` column — QA cross-table checks must look up metro from `zip_codes`
 - Metro values in DB are title case ("Pittsburgh", not "pittsburgh") — QA constants were lowercase, causing false failures
+
+### 2026-06-30 — GTM Pipeline Hardening & 8-Metro Re-Score
+**Completed:**
+- Re-ran all 5 dimension pipelines over 1,250 ZIPs across 8 metros (1,224 scored; 26 have no CDC data)
+- Pipeline hardening fixes (branch `harden/metro-config`):
+  - ZIP loader pagination past Supabase 1000-row default cap
+  - Raster cache-skip: now checks full ZIP set coverage instead of hardcoded `row_count >= 550`
+  - Metro-median imputation for raster nodata nulls: cardiovascular (noise_raw, impervious_raw), stress (light_pollution_raw), heat (impervious_raw, tree_canopy_raw), respiratory (green_cover_raw, air_quality_raw, environmental_burden_raw)
+  - USDA Food Atlas -9999 sentinel values (GROCPTH16) nulled at read time and imputed with metro median
+  - Removed obsolete GRADE_SCALE + fixed-threshold boundary tests from Suite 3 (all 5 pipelines + overall)
+  - Removed "No null letter_grade in Supabase" from Suite 4 (all 6 pipelines) — grades now applied by SQL afterward
+  - Removed per-ZIP hardcoded grade-band spot checks from Suite 3 (all 5 pipelines)
+- Applied pooled percentile grades via `scripts/apply_percentile_grades.sql` (A≥p90, B=p70-90, C=p30-70, D=p10-30, F<p10)
+  - `_pre_gtm` backup columns retained in all 5 dimension tables for rollback
+- Rewrote interpretation prompt to anchor tone to relative grade standing:
+  - Replaced raw `Grade: A` with pre-translated tone anchor phrase via `TONE_MAP`
+  - Two-input hierarchy: RELATIVE STANDING (primary, tone MUST match) vs COMPONENT CONDITIONS (supporting detail)
+  - Reconciliation instruction for grade/condition disagreement
+  - Model instructed to use varied wording, not parrot anchor phrase
+  - Edge function `index.ts` mirrored with identical prompt structure
+- Added `--mode audit` to batch script: read-only contradiction scan (no Claude API needed)
+- Added `detect_contradiction()` keyword heuristic — non-blocking warnings, not gate failures
+- Batch script: paginated fetch, skip-existing logic, `--force` flag
+- Regenerated all 1,224×5 interpretations with tone-anchored prompt
+
+**Left off at:**
+- All pipelines, grades, and interpretations complete. Branch `harden/metro-config` is the active working branch.
+
+**Next session should start with:**
+1. Deploy updated edge function to Supabase (`supabase functions deploy generate-interpretation`)
+2. Move frontend to Lovable using Supabase REST API
+3. Frontend polish
+
+**Any issues or surprises:**
+- ~26 ZIPs consistently have no CDC PLACES data across all dimensions — these score correctly on raster/environmental components but null on health outcome components, resulting in no composite score. This is expected and documented.
+- USDA Food Atlas uses -9999 as a "no data" sentinel — was being treated as a real value, poisoning grocery_density_raw stats (mean = -16)
+- Percentile grading makes grade/condition contradictions common (grade-A ZIP can have mediocre absolute conditions) — the tone-anchored prompt redesign resolves this
 
 ### 2026-04-16 — Metro Expansion (Pipeline Script Updates + Content Brief)
 **Completed:**
