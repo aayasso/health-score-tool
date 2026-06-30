@@ -4,9 +4,10 @@ Replicates D1 edge function prompt logic with qualitative tercile conversion.
 Run in Colab with SUPABASE_URL, SUPABASE_KEY (service role), ANTHROPIC_API_KEY in secrets.
 
 Usage:
-  python batch_generate_interpretations.py --mode test         # Print 50 interpretations, no DB write
-  python batch_generate_interpretations.py --mode test-write   # Write 50 to DB for SQL verification
-  python batch_generate_interpretations.py --mode full         # Write all 2,870 (574 ZIPs x 5 dims)
+  python batch_generate_interpretations.py --mode test         # Print test ZIPs, no DB write
+  python batch_generate_interpretations.py --mode test-write   # Write test ZIPs to DB for verification
+  python batch_generate_interpretations.py --mode full         # Write all ZIPs (skip existing)
+  python batch_generate_interpretations.py --mode full --force # Regenerate ALL, even existing
 """
 
 import os
@@ -232,7 +233,7 @@ def write_and_verify(supabase, table, zipcode, interpretation):
     _shared_write_and_verify(supabase, table, zipcode, "interpretation", interpretation)
 
 
-def run(mode):
+def run(mode, force=False):
     supabase_url = os.environ.get("SUPABASE_URL", "")
     supabase_key = os.environ.get("SUPABASE_KEY", "")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -252,23 +253,43 @@ def run(mode):
 
     for dim_key, dim in DIMENSIONS.items():
         comp_cols = [c["column"] for c in dim["components"]]
-        select_cols = ",".join(["zipcode", "metro", "letter_grade"] + comp_cols)
+        select_cols = ",".join(["zipcode", "metro", "letter_grade", "interpretation"] + comp_cols)
 
-        # Fetch in-scope rows
-        query = supabase.table(dim["table"]) \
-            .select(select_cols) \
-            .in_("metro", IN_SCOPE_METROS) \
-            .not_.is_("letter_grade", "null")
+        # Fetch in-scope rows — paginate past Supabase 1000-row default cap
+        rows = []
+        batch_size = 1000
+        offset = 0
+        while True:
+            query = supabase.table(dim["table"]) \
+                .select(select_cols) \
+                .in_("metro", IN_SCOPE_METROS) \
+                .not_.is_("letter_grade", "null")
 
-        if mode in ("test", "test-write"):
-            query = query.in_("zipcode", TEST_ZIPS)
+            if mode in ("test", "test-write"):
+                query = query.in_("zipcode", TEST_ZIPS)
 
-        # Supabase client paginates at 1000 by default; 574 fits in one page
-        response = query.execute()
-        rows = response.data
+            resp = query.range(offset, offset + batch_size - 1).execute()
+            if not resp.data:
+                break
+            rows.extend(resp.data)
+            if len(resp.data) < batch_size:
+                break
+            offset += batch_size
+
+        # In full mode, skip rows that already have an interpretation (unless --force)
+        skipped = 0
+        if mode == "full" and not force:
+            pending = []
+            for row in rows:
+                if row.get("interpretation"):
+                    skipped += 1
+                else:
+                    pending.append(row)
+            rows = pending
 
         print(f"\n{'='*70}")
-        print(f"  {dim['label']}  |  {len(rows)} ZIPs  |  mode={mode}")
+        skip_msg = f"  |  {skipped} skipped (existing)" if skipped else ""
+        print(f"  {dim['label']}  |  {len(rows)} to generate{skip_msg}  |  mode={mode}")
         print(f"{'='*70}")
 
         for i, row in enumerate(rows):
@@ -342,7 +363,12 @@ if __name__ == "__main__":
         "--mode",
         choices=["test", "test-write", "full"],
         required=True,
-        help="test=print only, test-write=write 10 ZIPs, full=write all 574 ZIPs",
+        help="test=print only, test-write=write test ZIPs, full=write all ZIPs",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Regenerate all interpretations, even those already present (default: skip existing)",
     )
     args = parser.parse_args()
-    run(args.mode)
+    run(args.mode, force=args.force)
