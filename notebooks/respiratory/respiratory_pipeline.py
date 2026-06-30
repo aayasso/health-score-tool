@@ -790,10 +790,12 @@ df["metro"] = df["zipcode"].map(ZIP_METRO_MAP)
 # Filter to only our ZIPs (safety)
 df = df[df["zipcode"].isin(ALL_ZIPS)].copy()
 
-# ── Metro-median imputation for raster nodata ────────────────
-# A handful of ZIPs fall on raster nodata pixels (e.g. water bodies).
-# Fill nulls with the median of the same metro so no ZIPs are dropped.
-for col in ["green_cover_raw"]:
+# ── Metro-median imputation for missing component values ─────
+# green_cover_raw: raster nodata (water bodies, etc.)
+# air_quality_raw: EPA AQS is county-level — ~183 ZIPs in counties with no monitor
+# environmental_burden_raw: EJScreen coverage gaps in some ZIPs
+# Fill nulls with the median of the same metro so no ZIP carries a null component.
+for col in ["green_cover_raw", "air_quality_raw", "environmental_burden_raw"]:
     nulls = df[col].isna()
     if nulls.any():
         metro_medians = df.groupby("metro")[col].transform("median")
